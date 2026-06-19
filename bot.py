@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
 
-# ===== ENV =====
+# 🔑 ключи
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -13,16 +13,14 @@ if not TELEGRAM_TOKEN:
 if not OPENAI_API_KEY:
     raise Exception("OPENAI_API_KEY not set")
 
-# ===== OpenAI client =====
+# 🤖 OpenAI клиент
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-
-# ===== /start =====
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я бот 🤖")
+    await update.message.reply_text("Привет! Я твой AI-бот 🤖")
 
-
-# ===== chat handler =====
+# чат
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
@@ -40,16 +38,10 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Ошибка: {str(e)}")
 
+# запуск
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-# ===== app =====
-def main():
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
-
-    app.run_polling()
-
-
-if __name__ == "__main__":
-    main()
+app.run_polling()
