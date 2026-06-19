@@ -1,17 +1,17 @@
 import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import openai
+from openai import OpenAI
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-openai.api_key = OPENAI_API_KEY
 
 if not TELEGRAM_TOKEN:
     raise Exception("TELEGRAM_TOKEN not set")
 if not OPENAI_API_KEY:
     raise Exception("OPENAI_API_KEY not set")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я бот 🤖")
@@ -20,14 +20,14 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {"role": "user", "content": user_text}
             ]
         )
 
-        answer = response["choices"][0]["message"]["content"]
+        answer = response.choices[0].message.content
         await update.message.reply_text(answer)
 
     except Exception as e:
