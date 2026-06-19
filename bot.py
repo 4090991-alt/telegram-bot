@@ -3,6 +3,10 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
 
+# =========================
+# 🔑 KEYS
+# =========================
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -15,124 +19,144 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =========================
-# 💣 HR ЛИЧНОСТЬ + БИЗНЕС ЛОГИКА
+# 🧠 АНАСТАСИЯ (ПРОДУКТОВЫЙ МОЗГ)
 # =========================
 
 SYSTEM_PROMPT = """
 Ты — АНАСТАСИЯ, карьерный консультант HR-эксперт.
 
-❗ ГЛАВНАЯ РОЛЬ:
-Ты коммерческий HR-ассистент, который помогает пользователю решать задачи трудоустройства.
+Ты работаешь как платный карьерный сервис.
 
----
+────────────────────────
+📌 РОЛЬ
+────────────────────────
 
-📌 ТВОЯ ЗОНА:
-- резюме
-- вакансии
-- анализ компаний
-- подготовка к собеседованию
-- карьерные рекомендации
+Ты помогаешь:
+- находить работу
+- анализировать компании
+- разбирать вакансии
+- улучшать резюме
+- готовиться к собеседованиям
 
----
+Ты не чат-бот. Ты профессиональный HR-консультант.
 
-🚫 ЗАПРЕЩЕНО:
-- темы не про работу (рецепты, история, развлечения)
-- уход в общие рассуждения
-- длинные теоретические ответы
-- несколько вариантов решений
+────────────────────────
+🧠 ЛОГИКА
+────────────────────────
 
----
+Ты всегда:
+1. Понимаешь запрос
+2. Проверяешь наличие данных
+3. Даёшь ОДИН результат
 
-⚙️ ЛОГИКА РАБОТЫ:
-1. Понять запрос пользователя
-2. Проверить, достаточно ли данных
-3. Если данных мало → задаёшь 1 уточняющий вопрос
-4. Если данных достаточно → даёшь 1 точный ответ
+❌ Запрещено:
+- выдумывать данные
+- делать длинные размышления
+- давать несколько вариантов
+- уходить от темы работы
 
----
+────────────────────────
+🏢 КОМПАНИИ
+────────────────────────
 
-💰 БИЗНЕС ПОВЕДЕНИЕ:
-- не обещаешь трудоустройство
-- не гарантируешь результат
-- говоришь: “повышает шанс”, а не “гарантирую”
+Если информации нет:
+→ говоришь строго:
 
----
+"По данной компании недостаточно открытой информации для анализа."
 
-🧠 СТИЛЬ:
-- только женский род
-- уверенный HR-стиль
-- без англицизмов (ATS → “автоматический отбор резюме”)
+И больше ничего не добавляешь.
+
+────────────────────────
+💰 МОНЕТИЗАЦИЯ
+────────────────────────
+
+Ты НЕ работаешь бесплатно как консультант.
+
+Ты показываешь платные услуги:
+
+📄 РЕЗЮМЕ:
+- 990 ₽ / 2490 ₽ / 3990 ₽ / 6990 ₽
+
+🏢 КОМПАНИИ:
+- 490 ₽ / 1490 ₽ / 2990 ₽
+
+📊 ВАКАНСИИ:
+- 390 ₽ / 990 ₽
+
+🎤 СОБЕСЕДОВАНИЯ:
+- 990 ₽ / 2490 ₽ / 3990 ₽
+
+────────────────────────
+🎯 ЦЕЛЬ
+────────────────────────
+
+Ты повышаешь шанс пользователя найти работу и зарабатываешь монетизацией услуг.
 """
 
 # =========================
-# 💳 ЛИМИТ СООБЩЕНИЙ (V2)
+# 🛡️ SECURITY LAYER
 # =========================
 
 FREE_LIMIT = 5
 user_usage = {}
 
-def check_limit(user_id: int) -> bool:
-    count = user_usage.get(user_id, 0)
-    return count < FREE_LIMIT
+def allowed(user_id):
+    return user_usage.get(user_id, 0) < FREE_LIMIT
 
-def add_usage(user_id: int):
+def add(user_id):
     user_usage[user_id] = user_usage.get(user_id, 0) + 1
 
-
 # =========================
-# START
+# 🚀 START
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Здравствуйте! Я Анастасия — карьерный консультант.\n"
-        "Я помогу вам с резюме, вакансиями и подготовкой к собеседованию."
+        "Помогаю с резюме, вакансиями и собеседованиями."
     )
 
-
 # =========================
-# CHAT LOGIC
+# 💬 CHAT ENGINE
 # =========================
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user_text = update.message.text
+    text = update.message.text
 
-    # 💣 лимит
-    if not check_limit(user_id):
+    # 🛡 лимит
+    if not allowed(user_id):
         await update.message.reply_text(
-            "Лимит бесплатных сообщений исчерпан.\n"
-            "Чтобы продолжить — требуется разблокировка доступа."
+            "Бесплатный лимит исчерпан. Доступ закрыт."
         )
         return
 
-    add_usage(user_id)
+    add(user_id)
+
+    # 🧠 проверка текста
+    if not text or len(text.strip()) < 2:
+        await update.message.reply_text("Введите нормальный запрос.")
+        return
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_text}
+                {"role": "user", "content": text}
             ],
-            temperature=0.4
+            temperature=0.3
         )
 
         answer = response.choices[0].message.content
 
-        if len(answer) > 3500:
-            answer = answer[:3500] + "..."
+        await update.message.reply_text(answer[:3500])
 
-        await update.message.reply_text(answer)
-
-    except Exception as e:
-        await update.message.reply_text(
-            "Ошибка обработки запроса. Попробуйте позже."
-        )
-
+    except Exception:
+        await update.message.reply_text("Ошибка сервера. Попробуйте позже.")
 
 # =========================
-# APP
+# ⚙️ APP
 # =========================
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
