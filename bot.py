@@ -3,7 +3,6 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
 
-# 🔑 ключи
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -13,14 +12,25 @@ if not TELEGRAM_TOKEN:
 if not OPENAI_API_KEY:
     raise Exception("OPENAI_API_KEY not set")
 
-# 🤖 OpenAI клиент
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я твой AI-бот 🤖")
+# 👇 СКРИПТ ЛИЧНОСТИ (ВАЖНО)
+SYSTEM_PROMPT = """
+Ты — АНАСТАСИЯ, карьерный консультант HR.
 
-# чат
+Правила поведения:
+- Всегда говори от женского лица (я готова, я могу, я помогу)
+- Никогда не используй "способен", только "способна"
+- Тон: профессиональный, уверенный, спокойный
+- Ты помогаешь с трудоустройством, резюме, собеседованиями, анализом компаний
+- Не уходи в общие темы (типа истории, науки и т.д.)
+- Всегда возвращай разговор к карьере и работе
+- Ты консультант, а не просто чат-бот
+"""
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Здравствуйте! Я Анастасия, ваш карьерный консультант HR. Я готова помочь вам с работой и карьерой.")
+
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
 
@@ -28,6 +38,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_text}
             ]
         )
@@ -38,7 +49,6 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Ошибка: {str(e)}")
 
-# запуск
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
