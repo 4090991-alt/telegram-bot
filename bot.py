@@ -7,101 +7,71 @@ logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
+USER_STATE = {}
+
 # =========================
 # START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [InlineKeyboardButton("🟢 FREE режим", callback_data="mode_free")],
-        [InlineKeyboardButton("🟡 PRO режим", callback_data="mode_pro")],
-        [InlineKeyboardButton("🔴 VIP режим", callback_data="mode_vip")]
+        [InlineKeyboardButton("FREE режим", callback_data="mode_free")],
+        [InlineKeyboardButton("PRO режим", callback_data="mode_pro")],
+        [InlineKeyboardButton("VIP режим", callback_data="mode_vip")]
     ]
 
     await update.message.reply_text(
-        "💼 Career System\nВыберите режим:",
+        "Career System\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-
 # =========================
-# SINGLE CALLBACK HANDLER (ВАЖНО)
+# CALLBACK
 # =========================
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
+    user_id = query.from_user.id
     data = query.data
 
-    # =========================
-    # STEP 1: MODE SELECT
-    # =========================
+    # SET MODE
     if data.startswith("mode_"):
-
-        mode = data.replace("mode_", "")
+        USER_STATE[user_id] = {"mode": data}
 
         keyboard = [
-            [InlineKeyboardButton("📄 Резюме FREE", callback_data=f"{mode}_resume")],
-            [InlineKeyboardButton("📄 Резюме PRO", callback_data=f"{mode}_resume_pro")],
-            [InlineKeyboardButton("🏢 Анализ компании", callback_data=f"{mode}_company")],
-            [InlineKeyboardButton("🔎 Вакансии", callback_data=f"{mode}_jobs")],
-            [InlineKeyboardButton("🤝 Помощь в собеседовании", callback_data=f"{mode}_interview")]
+            [InlineKeyboardButton("Резюме", callback_data="resume")],
+            [InlineKeyboardButton("Компания", callback_data="company")],
+            [InlineKeyboardButton("Вакансии", callback_data="jobs")],
+            [InlineKeyboardButton("Собеседование", callback_data="interview")]
         ]
 
         await query.message.reply_text(
-            f"📌 Режим выбран: {mode.upper()}\nВыберите действие:",
+            f"Режим выбран: {data}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
-    # =========================
-    # STEP 2: ACTIONS
-    # =========================
-    if "resume" in data:
-        text = "📄 Резюме — создание и формат HH"
+    mode = USER_STATE.get(user_id, {}).get("mode", "free")
 
-    elif "company" in data:
-        text = "🏢 Анализ компании — описание, риски, зарплаты"
+    # SIMPLE RESPONSE (СТАБИЛЬНАЯ ВЕРСИЯ)
+    if data == "resume":
+        text = "Резюме: отправьте ФИО, опыт, образование"
 
-    elif "jobs" in data:
-        text = "🔎 Вакансии — подбор и ссылки"
+    elif data == "company":
+        text = "Компания: укажите название и город"
 
-    elif "interview" in data:
-        text = "🤝 Помощь в собеседовании — подготовка HR"
+    elif data == "jobs":
+        text = "Вакансии: укажите должность и город"
+
+    elif data == "interview":
+        text = "Собеседование: включено (PRO/VIP логика позже)"
 
     else:
         text = "Ошибка"
 
-    keyboard = [
-        [InlineKeyboardButton("💳 Продолжить", callback_data=f"pay_{data}")]
-    ]
-
-    await query.message.reply_text(
-        f"{text}\n\n💰 Готово к оплате",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return
-
-    # =========================
-    # STEP 3: PAYMENT (LOGIC ONLY)
-    # =========================
-    if data.startswith("pay_"):
-
-        service = data.replace("pay_", "")
-
-        await query.message.reply_text(
-            f"""
-💳 ОПЛАТА
-
-Услуга: {service}
-Сумма: 10 ₽
-
-👉 дальше подключим Tinkoff Pay
-"""
-        )
-        return
-
+    await query.message.reply_text(text)
 
 # =========================
 # APP
