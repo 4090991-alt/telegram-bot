@@ -15,100 +15,92 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🟢 FREE режим", callback_data="mode_free")],
         [InlineKeyboardButton("🟡 PRO режим", callback_data="mode_pro")],
-        [InlineKeyboardButton("🔴 VIP режим", callback_data="mode_vip")],
+        [InlineKeyboardButton("🔴 VIP режим", callback_data="mode_vip")]
     ]
 
     await update.message.reply_text(
-        "💼 Career AI System\n\nВыберите режим:",
+        "💼 Career System\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 # =========================
-# MODE SELECT
+# SINGLE CALLBACK HANDLER (ВАЖНО)
 # =========================
-async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    mode = query.data
-
-    # =========================
-    # SERVICES MENU
-    # =========================
-    keyboard = [
-        [InlineKeyboardButton("📄 Резюме", callback_data=f"{mode}_resume")],
-        [InlineKeyboardButton("🏢 Анализ компании", callback_data=f"{mode}_company")],
-        [InlineKeyboardButton("🔎 Поиск вакансий", callback_data=f"{mode}_jobs")],
-        [InlineKeyboardButton("🤝 Помощь в собеседовании", callback_data=f"{mode}_interview")]
-    ]
-
-    mode_name = {
-        "mode_free": "FREE",
-        "mode_pro": "PRO",
-        "mode_vip": "VIP"
-    }[mode]
-
-    await query.message.reply_text(
-        f"📌 Режим: {mode_name}\n\nВыберите действие:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-
-# =========================
-# ACTION HANDLER
-# =========================
-async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
     data = query.data
 
-    # FIX: понятные тексты
-    texts = {
-        "resume": "📄 Резюме — создание и улучшение",
-        "company": "🏢 Анализ компании — риски, зарплаты, описание",
-        "jobs": "🔎 Поиск вакансий — подбор и ссылки",
-        "interview": "🤝 Помощь в собеседовании — вопросы и подготовка"
-    }
+    # =========================
+    # STEP 1: MODE SELECT
+    # =========================
+    if data.startswith("mode_"):
 
-    # извлекаем действие
-    action = data.split("_")[1]
+        mode = data.replace("mode_", "")
 
-    text = texts.get(action, "Ошибка")
+        keyboard = [
+            [InlineKeyboardButton("📄 Резюме FREE", callback_data=f"{mode}_resume")],
+            [InlineKeyboardButton("📄 Резюме PRO", callback_data=f"{mode}_resume_pro")],
+            [InlineKeyboardButton("🏢 Анализ компании", callback_data=f"{mode}_company")],
+            [InlineKeyboardButton("🔎 Вакансии", callback_data=f"{mode}_jobs")],
+            [InlineKeyboardButton("🤝 Помощь в собеседовании", callback_data=f"{mode}_interview")]
+        ]
+
+        await query.message.reply_text(
+            f"📌 Режим выбран: {mode.upper()}\nВыберите действие:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    # =========================
+    # STEP 2: ACTIONS
+    # =========================
+    if "resume" in data:
+        text = "📄 Резюме — создание и формат HH"
+
+    elif "company" in data:
+        text = "🏢 Анализ компании — описание, риски, зарплаты"
+
+    elif "jobs" in data:
+        text = "🔎 Вакансии — подбор и ссылки"
+
+    elif "interview" in data:
+        text = "🤝 Помощь в собеседовании — подготовка HR"
+
+    else:
+        text = "Ошибка"
 
     keyboard = [
         [InlineKeyboardButton("💳 Продолжить", callback_data=f"pay_{data}")]
     ]
 
     await query.message.reply_text(
-        f"{text}\n\n💰 Доступ зависит от выбранного режима",
+        f"{text}\n\n💰 Готово к оплате",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+    return
 
+    # =========================
+    # STEP 3: PAYMENT (LOGIC ONLY)
+    # =========================
+    if data.startswith("pay_"):
 
-# =========================
-# PAYMENT STEP (ЗАГЛУШКА ПОКА)
-# =========================
-async def pay_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        service = data.replace("pay_", "")
 
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data.replace("pay_", "")
-
-    await query.message.reply_text(
-        f"""
+        await query.message.reply_text(
+            f"""
 💳 ОПЛАТА
 
-Услуга: {data}
+Услуга: {service}
+Сумма: 10 ₽
 
-👉 Здесь будет Tinkoff Pay
-👉 После оплаты откроется результат
+👉 дальше подключим Tinkoff Pay
 """
-    )
+        )
+        return
 
 
 # =========================
@@ -117,8 +109,6 @@ async def pay_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(mode_handler, pattern="mode_"))
-app.add_handler(CallbackQueryHandler(action_handler, pattern=".*_(resume|company|jobs|interview)$"))
-app.add_handler(CallbackQueryHandler(pay_handler, pattern="pay_"))
+app.add_handler(CallbackQueryHandler(handler))
 
 app.run_polling()
