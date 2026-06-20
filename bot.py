@@ -30,53 +30,49 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =========================
-# STORAGE (MVP CRM)
+# STATE MACHINE (FIXED)
 # =========================
 state = {}
 users = {}
 subscriptions = set()
-revenue = 0
 
 FREE_LIMIT = 5
 
-# =========================
-# STATE MACHINE
-# =========================
-def get_state(user_id):
-    if user_id not in state:
-        state[user_id] = {
-            "stage": "menu",
+def get_state(uid):
+    if uid not in state:
+        state[uid] = {
+            "stage": "menu",          # menu → plan → collect → done
             "product": None,
             "plan": None,
             "data": {},
             "photo": None,
-            "paid": False
+            "locked": False
         }
-    return state[user_id]
+    return state[uid]
 
 # =========================
 # CRM
 # =========================
-def track(user_id):
-    if user_id not in users:
-        users[user_id] = {"usage": 0, "created": datetime.now()}
-    users[user_id]["usage"] += 1
+def track(uid):
+    if uid not in users:
+        users[uid] = {"usage": 0}
+    users[uid]["usage"] += 1
 
-def allowed(user_id):
-    return user_id in subscriptions or users.get(user_id, {}).get("usage", 0) < FREE_LIMIT
+def allowed(uid):
+    return uid in subscriptions or users.get(uid, {}).get("usage", 0) < FREE_LIMIT
 
 # =========================
-# START MENU
+# START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    get_state(uid)
+    st = get_state(uid)
+    st["stage"] = "menu"
 
     keyboard = [
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
         [InlineKeyboardButton("🏢 Анализ компании", callback_data="company")],
         [InlineKeyboardButton("🎤 Собеседование", callback_data="interview")],
-        [InlineKeyboardButton("🔎 Вакансии", callback_data="jobs")]
     ]
 
     await update.message.reply_text(
@@ -85,15 +81,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# PHOTO ENGINE (1 PHOTO ONLY)
+# PHOTO ENGINE (1 PHOTO ONLY FIXED)
 # =========================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     st = get_state(uid)
 
-    # ❌ уже есть фото
+    # ❌ блок если уже есть фото
     if st["photo"]:
         await update.message.reply_text("📌 Можно загрузить только 1 фото")
+        return
+
+    if st["stage"] not in ["collect", "plan"]:
+        await update.message.reply_text("📌 Сначала выберите резюме")
         return
 
     photo = update.message.photo[-1]
@@ -106,10 +106,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     st["photo"] = path
 
-    await update.message.reply_text("✅ Фото добавлено в резюме")
+    await update.message.reply_text("✅ Фото добавлено")
 
 # =========================
-# FLOW CONTROLLER
+# BUTTON FLOW (FIXED STATE)
 # =========================
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -118,43 +118,58 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = q.from_user.id
     st = get_state(uid)
 
+    # -------------------------
     # PAYMENT
+    # -------------------------
     if q.data == "paid":
         subscriptions.add(uid)
-        st["paid"] = True
-        await q.message.reply_text("✅ PRO доступ активирован")
+        st["locked"] = True
+        await q.message.reply_text("✅ PRO/VIP активирован")
         return
 
+    # -------------------------
     # PRODUCT SELECT
+    # -------------------------
     st["product"] = q.data
-    st["stage"] = "plan_select"
+    st["stage"] = "plan"
 
     if q.data == "resume":
-        text = "📄 Выберите тип резюме"
         keyboard = [
             [InlineKeyboardButton("🟢 FREE", callback_data="resume_free")],
             [InlineKeyboardButton("🟡 PRO", callback_data="resume_pro")],
             [InlineKeyboardButton("🔴 VIP", callback_data="resume_vip")]
         ]
 
-    elif q.data == "company":
-        text = "🏢 Анализ компании (введите: компания + город)"
-        keyboard = []
+        text = "📄 Выберите тип резюме"
 
-    elif q.data == "interview":
-        text = "🎤 Интервью (платные модули)"
+    elif q.data == "company":
+        text = "🏢 Введите: компания + город"
         keyboard = []
 
     else:
-        text = "🔎 Введите город и должность"
+        text = "🎤 Подготовка к интервью"
         keyboard = []
 
-    kb = InlineKeyboardMarkup(keyboard) if keyboard else None
+    await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
 
-    await q.message.reply_text(text, reply_markup=kb)
+    # -------------------------
+    # PLAN SAVE FIX
+    # -------------------------
+    if q.data.startswith("resume_"):
+        st["plan"] = q.data.replace("resume_", "")
+        st["stage"] = "collect"
+
+        if st["plan"] == "free":
+            await q.message.reply_text("📄 Введите: ФИО, опыт, должность")
+
+        if st["plan"] == "pro":
+            await q.message.reply_text("📄 Введите опыт ПО ГОДАМ, достижения, должности")
+
+        if st["plan"] == "vip":
+            await q.message.reply_text("📄 Введите полный карьерный путь + цели + достижения")
 
 # =========================
-# TEXT FLOW (MAIN LOGIC)
+# CHAT ENGINE (HARD LOCKED FLOW)
 # =========================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -163,87 +178,67 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     track(uid)
 
+    # ❌ HARD LOCK
+    if st["stage"] not in ["collect"]:
+        await update.message.reply_text("📌 Сначала выберите услугу через /start")
+        return
+
     if not allowed(uid):
         await update.message.reply_text("❌ Лимит исчерпан")
         return
 
+    st["data"]["input"] = text
+
     # =========================
-    # RESUME FREE
+    # RESUME OUTPUT (SINGLE OUTPUT FIX)
     # =========================
     if st["product"] == "resume":
-        if st["plan"] is None:
-            await update.message.reply_text("Выберите тариф через /start")
-            return
 
-        if st["plan"] == "free":
-            st["data"]["raw"] = text
+        pdf = generate_pdf(text, st.get("photo"))
 
-            pdf = generate_pdf(text, st.get("photo"))
+        st["stage"] = "done"
 
-            await update.message.reply_document(pdf, filename="resume.pdf")
+        await update.message.reply_document(pdf, filename="resume.pdf")
 
-            await update.message.reply_text(
-                "Хотите PRO или VIP версию?"
-            )
-
-        elif st["plan"] == "pro":
-            st["data"]["pro"] = text
-            pdf = generate_pdf("PRO RESUME:\n" + text, st.get("photo"))
-
-            await update.message.reply_document(pdf, filename="pro_resume.pdf")
-
-        elif st["plan"] == "vip":
-            st["data"]["vip"] = text
-            pdf = generate_pdf("VIP CAREER STRATEGY:\n" + text, st.get("photo"))
-
-            await update.message.reply_document(pdf, filename="vip_resume.pdf")
-
+        await update.message.reply_text(
+            "⬇️ Хотите усиление?\nPRO / VIP доступны в меню"
+        )
         return
 
     # =========================
-    # COMPANY ANALYSIS
+    # COMPANY
     # =========================
     if st["product"] == "company":
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "HR analyst. Give structured company analysis."},
+                {"role": "system", "content": "Ты HR аналитик. Дай структурированный анализ компании."},
                 {"role": "user", "content": text}
             ]
         )
 
+        st["stage"] = "done"
+
         await update.message.reply_text(response.choices[0].message.content)
         return
 
-    # =========================
-    # DEFAULT AI
-    # =========================
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Career AI assistant"},
-            {"role": "user", "content": text}
-        ]
-    )
-
-    await update.message.reply_text(response.choices[0].message.content)
-
 # =========================
-# PDF ENGINE (WITH PHOTO)
+# PDF ENGINE (WITH PHOTO FIX)
 # =========================
-def generate_pdf(text, photo_path=None):
+def generate_pdf(text, photo=None):
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer)
 
     pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(100, 800, "CAREER RESUME")
+    pdf.drawString(100, 800, "RESUME")
 
     pdf.setFont("Helvetica", 12)
     pdf.drawString(100, 770, text[:200])
 
-    if photo_path:
+    if photo:
         try:
-            pdf.drawImage(photo_path, 400, 700, width=120, height=150)
+            pdf.drawImage(photo, 400, 700, width=120, height=150)
         except:
             pass
 
@@ -252,7 +247,7 @@ def generate_pdf(text, photo_path=None):
     return buffer
 
 # =========================
-# APP INIT
+# APP
 # =========================
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
@@ -261,8 +256,5 @@ app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-# =========================
-# RUN
-# =========================
 if __name__ == "__main__":
     app.run_polling()
