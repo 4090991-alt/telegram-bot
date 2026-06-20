@@ -3,7 +3,6 @@ import io
 import logging
 from datetime import datetime
 
-from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -28,19 +27,12 @@ logging.basicConfig(level=logging.INFO)
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
-    raise Exception("Missing keys")
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =========================
-# WEB DASHBOARD
+# STORAGE (MVP CRM)
 # =========================
-app_web = Flask(__name__)
-
-# =========================
-# CRM CORE
-# =========================
+state = {}
 users = {}
 subscriptions = set()
 revenue = 0
@@ -50,28 +42,28 @@ FREE_LIMIT = 5
 # =========================
 # STATE MACHINE
 # =========================
-state = {}
-
-def get_state(uid):
-    if uid not in state:
-        state[uid] = {
+def get_state(user_id):
+    if user_id not in state:
+        state[user_id] = {
             "stage": "menu",
             "product": None,
+            "plan": None,
             "data": {},
+            "photo": None,
             "paid": False
         }
-    return state[uid]
+    return state[user_id]
 
 # =========================
-# ACCESS CONTROL
+# CRM
 # =========================
-def allowed(uid):
-    return uid in subscriptions or users.get(uid, {}).get("usage", 0) < FREE_LIMIT
+def track(user_id):
+    if user_id not in users:
+        users[user_id] = {"usage": 0, "created": datetime.now()}
+    users[user_id]["usage"] += 1
 
-def track(uid):
-    if uid not in users:
-        users[uid] = {"usage": 0, "created": datetime.now()}
-    users[uid]["usage"] += 1
+def allowed(user_id):
+    return user_id in subscriptions or users.get(user_id, {}).get("usage", 0) < FREE_LIMIT
 
 # =========================
 # START MENU
@@ -82,14 +74,39 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
-        [InlineKeyboardButton("🏢 Компания", callback_data="company")],
-        [InlineKeyboardButton("🎤 Собеседование", callback_data="interview")]
+        [InlineKeyboardButton("🏢 Анализ компании", callback_data="company")],
+        [InlineKeyboardButton("🎤 Собеседование", callback_data="interview")],
+        [InlineKeyboardButton("🔎 Вакансии", callback_data="jobs")]
     ]
 
     await update.message.reply_text(
-        "👋 Career AI System\nВыберите действие:",
+        "👋 Career AI System",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+# =========================
+# PHOTO ENGINE (1 PHOTO ONLY)
+# =========================
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    st = get_state(uid)
+
+    # ❌ уже есть фото
+    if st["photo"]:
+        await update.message.reply_text("📌 Можно загрузить только 1 фото")
+        return
+
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+
+    os.makedirs("photos", exist_ok=True)
+    path = f"photos/{uid}.jpg"
+
+    await file.download_to_drive(path)
+
+    st["photo"] = path
+
+    await update.message.reply_text("✅ Фото добавлено в резюме")
 
 # =========================
 # FLOW CONTROLLER
@@ -101,105 +118,151 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = q.from_user.id
     st = get_state(uid)
 
-    # PAYMENT CONFIRM
+    # PAYMENT
     if q.data == "paid":
         subscriptions.add(uid)
         st["paid"] = True
         await q.message.reply_text("✅ PRO доступ активирован")
         return
 
+    # PRODUCT SELECT
     st["product"] = q.data
-    st["stage"] = "collecting"
+    st["stage"] = "plan_select"
 
     if q.data == "resume":
-        msg = "📄 Введите: ФИО, опыт, должность"
-        price = "FREE → PRO → VIP"
+        text = "📄 Выберите тип резюме"
+        keyboard = [
+            [InlineKeyboardButton("🟢 FREE", callback_data="resume_free")],
+            [InlineKeyboardButton("🟡 PRO", callback_data="resume_pro")],
+            [InlineKeyboardButton("🔴 VIP", callback_data="resume_vip")]
+        ]
 
     elif q.data == "company":
-        msg = "🏢 Введите: компания + город"
-        price = "FREE preview → PAID analysis"
+        text = "🏢 Анализ компании (введите: компания + город)"
+        keyboard = []
+
+    elif q.data == "interview":
+        text = "🎤 Интервью (платные модули)"
+        keyboard = []
 
     else:
-        msg = "🎤 Подготовка к интервью (описание опыта)"
-        price = "Paid module"
+        text = "🔎 Введите город и должность"
+        keyboard = []
 
-    keyboard = [[InlineKeyboardButton("💳 Активировать PRO", callback_data="paid")]]
+    kb = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    await q.message.reply_text(
-        f"{msg}\n\n💰 Модель: {price}",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await q.message.reply_text(text, reply_markup=kb)
 
 # =========================
-# AI ENGINE (CONTROLLED)
+# TEXT FLOW (MAIN LOGIC)
 # =========================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text
+    st = get_state(uid)
 
     track(uid)
 
     if not allowed(uid):
-        await update.message.reply_text("Лимит исчерпан. /start")
+        await update.message.reply_text("❌ Лимит исчерпан")
         return
 
-    try:
+    # =========================
+    # RESUME FREE
+    # =========================
+    if st["product"] == "resume":
+        if st["plan"] is None:
+            await update.message.reply_text("Выберите тариф через /start")
+            return
+
+        if st["plan"] == "free":
+            st["data"]["raw"] = text
+
+            pdf = generate_pdf(text, st.get("photo"))
+
+            await update.message.reply_document(pdf, filename="resume.pdf")
+
+            await update.message.reply_text(
+                "Хотите PRO или VIP версию?"
+            )
+
+        elif st["plan"] == "pro":
+            st["data"]["pro"] = text
+            pdf = generate_pdf("PRO RESUME:\n" + text, st.get("photo"))
+
+            await update.message.reply_document(pdf, filename="pro_resume.pdf")
+
+        elif st["plan"] == "vip":
+            st["data"]["vip"] = text
+            pdf = generate_pdf("VIP CAREER STRATEGY:\n" + text, st.get("photo"))
+
+            await update.message.reply_document(pdf, filename="vip_resume.pdf")
+
+        return
+
+    # =========================
+    # COMPANY ANALYSIS
+    # =========================
+    if st["product"] == "company":
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": "Ты карьерный HR AI. Давай структурированные, краткие, полезные ответы."
-                },
+                {"role": "system", "content": "HR analyst. Give structured company analysis."},
                 {"role": "user", "content": text}
             ]
         )
 
-        await update.message.reply_text(
-            response.choices[0].message.content[:3500]
-        )
+        await update.message.reply_text(response.choices[0].message.content)
+        return
 
-    except Exception as e:
-        logging.error(e)
-        await update.message.reply_text("Ошибка системы")
+    # =========================
+    # DEFAULT AI
+    # =========================
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Career AI assistant"},
+            {"role": "user", "content": text}
+        ]
+    )
+
+    await update.message.reply_text(response.choices[0].message.content)
 
 # =========================
-# PDF GENERATOR (RESUME)
+# PDF ENGINE (WITH PHOTO)
 # =========================
-def generate_pdf(text):
+def generate_pdf(text, photo_path=None):
     buffer = io.BytesIO()
-    p = canvas.Canvas(buffer)
-    p.drawString(100, 800, "CAREER CV")
-    p.drawString(100, 750, text[:200])
-    p.save()
+    pdf = canvas.Canvas(buffer)
+
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(100, 800, "CAREER RESUME")
+
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(100, 770, text[:200])
+
+    if photo_path:
+        try:
+            pdf.drawImage(photo_path, 400, 700, width=120, height=150)
+        except:
+            pass
+
+    pdf.save()
     buffer.seek(0)
     return buffer
 
 # =========================
-# ADMIN PANEL (WEB)
-# =========================
-@app_web.route("/admin")
-def admin():
-    return jsonify({
-        "users": len(users),
-        "subscriptions": len(subscriptions),
-        "revenue": revenue
-    })
-
-# =========================
-# BOT INIT
+# APP INIT
 # =========================
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button))
+app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
 # =========================
-# RUN (BOT + WEB)
+# RUN
 # =========================
 if __name__ == "__main__":
-    import threading
-
-    threading.Thread(target=lambda: app_web.run(host="0.0.0.0", port=8080)).start()
     app.run_polling()
