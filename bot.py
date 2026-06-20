@@ -1,5 +1,9 @@
 import os
+import io
 import logging
+from datetime import datetime
+
+from flask import Flask, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -9,7 +13,9 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+
 from openai import OpenAI
+from reportlab.pdfgen import canvas
 
 # =========================
 # LOGGING
@@ -19,134 +25,134 @@ logging.basicConfig(level=logging.INFO)
 # =========================
 # KEYS
 # =========================
-
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not TELEGRAM_TOKEN:
-    raise Exception("TELEGRAM_TOKEN not set")
-
-if not OPENAI_API_KEY:
-    raise Exception("OPENAI_API_KEY not set")
+if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
+    raise Exception("Missing keys")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =========================
-# AI ROLE
+# WEB DASHBOARD
 # =========================
-
-SYSTEM_PROMPT = """
-Ты — АНАСТАСИЯ, карьерный HR-консультант.
-
-Ты помогаешь:
-- резюме
-- вакансии
-- анализ компаний
-- собеседования
-
-Правила:
-- женский род
-- без выдумок
-- один ответ = один результат
-"""
+app_web = Flask(__name__)
 
 # =========================
-# CRM SIMPLE
+# CRM CORE
 # =========================
+users = {}
+subscriptions = set()
+revenue = 0
 
 FREE_LIMIT = 5
-user_usage = {}
-paid_users = set()
-
-def allowed(user_id):
-    return user_id in paid_users or user_usage.get(user_id, 0) < FREE_LIMIT
-
-def add_usage(user_id):
-    if user_id not in paid_users:
-        user_usage[user_id] = user_usage.get(user_id, 0) + 1
 
 # =========================
-# START
+# STATE MACHINE
 # =========================
+state = {}
 
+def get_state(uid):
+    if uid not in state:
+        state[uid] = {
+            "stage": "menu",
+            "product": None,
+            "data": {},
+            "paid": False
+        }
+    return state[uid]
+
+# =========================
+# ACCESS CONTROL
+# =========================
+def allowed(uid):
+    return uid in subscriptions or users.get(uid, {}).get("usage", 0) < FREE_LIMIT
+
+def track(uid):
+    if uid not in users:
+        users[uid] = {"usage": 0, "created": datetime.now()}
+    users[uid]["usage"] += 1
+
+# =========================
+# START MENU
+# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Я АНАСТАСИЯ — карьерный HR-ассистент.\n"
-        "Напишите /services"
-    )
+    uid = update.effective_user.id
+    get_state(uid)
 
-# =========================
-# SERVICES
-# =========================
-
-async def services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("📄 Резюме — 2490₽", callback_data="resume")],
-        [InlineKeyboardButton("🏢 Анализ компании — 1490₽", callback_data="company")],
-        [InlineKeyboardButton("🎤 Собеседование — 990₽", callback_data="interview")]
+        [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
+        [InlineKeyboardButton("🏢 Компания", callback_data="company")],
+        [InlineKeyboardButton("🎤 Собеседование", callback_data="interview")]
     ]
 
     await update.message.reply_text(
-        "💼 УСЛУГИ АНАСТАСИИ",
+        "👋 Career AI System\nВыберите действие:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# CALLBACK HANDLER
+# FLOW CONTROLLER
 # =========================
-
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
 
-    if query.data == "paid":
-        user_id = query.from_user.id
-        paid_users.add(user_id)
+    uid = q.from_user.id
+    st = get_state(uid)
 
-        await query.message.reply_text(
-            "✅ Оплата подтверждена!\nДоступ открыт."
-        )
+    # PAYMENT CONFIRM
+    if q.data == "paid":
+        subscriptions.add(uid)
+        st["paid"] = True
+        await q.message.reply_text("✅ PRO доступ активирован")
         return
 
-    texts = {
-        "resume": "📄 РЕЗЮМЕ — 2490₽",
-        "company": "🏢 АНАЛИЗ КОМПАНИИ — 1490₽",
-        "interview": "🎤 СОБЕСЕДОВАНИЕ — 990₽"
-    }
+    st["product"] = q.data
+    st["stage"] = "collecting"
 
-    text = texts.get(query.data, "Ошибка")
+    if q.data == "resume":
+        msg = "📄 Введите: ФИО, опыт, должность"
+        price = "FREE → PRO → VIP"
 
-    keyboard = [
-        [InlineKeyboardButton("✅ Я оплатил", callback_data="paid")]
-    ]
+    elif q.data == "company":
+        msg = "🏢 Введите: компания + город"
+        price = "FREE preview → PAID analysis"
 
-    await query.message.reply_text(
-        text + "\n\nОплата: СБП / карта XXXX XXXX XXXX",
+    else:
+        msg = "🎤 Подготовка к интервью (описание опыта)"
+        price = "Paid module"
+
+    keyboard = [[InlineKeyboardButton("💳 Активировать PRO", callback_data="paid")]]
+
+    await q.message.reply_text(
+        f"{msg}\n\n💰 Модель: {price}",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# CHAT AI
+# AI ENGINE (CONTROLLED)
 # =========================
-
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    uid = update.effective_user.id
     text = update.message.text
 
-    if not allowed(user_id):
-        await update.message.reply_text("Лимит исчерпан. /services")
-        return
+    track(uid)
 
-    add_usage(user_id)
+    if not allowed(uid):
+        await update.message.reply_text("Лимит исчерпан. /start")
+        return
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "system",
+                    "content": "Ты карьерный HR AI. Давай структурированные, краткие, полезные ответы."
+                },
                 {"role": "user", "content": text}
-            ],
-            temperature=0.3
+            ]
         )
 
         await update.message.reply_text(
@@ -155,18 +161,45 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         logging.error(e)
-        await update.message.reply_text("Ошибка сервера")
+        await update.message.reply_text("Ошибка системы")
 
 # =========================
-# APP
+# PDF GENERATOR (RESUME)
 # =========================
+def generate_pdf(text):
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer)
+    p.drawString(100, 800, "CAREER CV")
+    p.drawString(100, 750, text[:200])
+    p.save()
+    buffer.seek(0)
+    return buffer
 
+# =========================
+# ADMIN PANEL (WEB)
+# =========================
+@app_web.route("/admin")
+def admin():
+    return jsonify({
+        "users": len(users),
+        "subscriptions": len(subscriptions),
+        "revenue": revenue
+    })
+
+# =========================
+# BOT INIT
+# =========================
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("services", services))
-
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-app.run_polling()
+# =========================
+# RUN (BOT + WEB)
+# =========================
+if __name__ == "__main__":
+    import threading
+
+    threading.Thread(target=lambda: app_web.run(host="0.0.0.0", port=8080)).start()
+    app.run_polling()
