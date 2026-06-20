@@ -12,7 +12,7 @@ from telegram.ext import (
 from openai import OpenAI
 
 # =========================
-# LOGGING (ВАЖНО ДЛЯ RAILWAY)
+# LOGGING
 # =========================
 logging.basicConfig(level=logging.INFO)
 
@@ -92,7 +92,7 @@ async def services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# CALLBACK (ОДИН ХЕНДЛЕР)
+# CALLBACK HANDLER
 # =========================
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -110,7 +110,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texts = {
         "resume": "📄 РЕЗЮМЕ — 2490₽",
-        "company": "🏢 АНАЛИЗ — 1490₽",
+        "company": "🏢 АНАЛИЗ КОМПАНИИ — 1490₽",
         "interview": "🎤 СОБЕСЕДОВАНИЕ — 990₽"
     }
 
@@ -167,7 +167,6 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("services", services))
 
 app.add_handler(CallbackQueryHandler(button))
-
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
 app.run_polling()
