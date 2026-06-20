@@ -1,29 +1,21 @@
 import os
-from datetime import datetime
-from telegram import (
-    Update,
-    LabeledPrice,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    PreCheckoutQueryHandler,
-    filters,
-    ContextTypes
+    ContextTypes,
+    filters
 )
 from openai import OpenAI
 
 # =========================
-# 🔑 KEYS
+# KEYS
 # =========================
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PROVIDER_TOKEN = os.getenv("PROVIDER_TOKEN")
 
 if not TELEGRAM_TOKEN:
     raise Exception("TELEGRAM_TOKEN not set")
@@ -31,136 +23,70 @@ if not TELEGRAM_TOKEN:
 if not OPENAI_API_KEY:
     raise Exception("OPENAI_API_KEY not set")
 
-if not PROVIDER_TOKEN:
-    raise Exception("PROVIDER_TOKEN not set")
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =========================
-# 👑 OWNER
-# =========================
-
-OWNER_ID = 0  # твой ID
-
-# =========================
-# 🧠 SYSTEM PROMPT (SAAS VERSION)
+# AI ROLE
 # =========================
 
 SYSTEM_PROMPT = """
 Ты — АНАСТАСИЯ, карьерный HR-консультант.
 
-Ты работаешь как платный SaaS сервис.
-
-Роли:
-- помогать с резюме
-- анализировать компании
+Ты помогаешь:
+- резюме
 - вакансии
+- анализ компаний
 - собеседования
 
 Правила:
 - женский род
+- без выдумок
 - один ответ = один результат
-- без фантазий
 """
 
 # =========================
-# 🧠 CRM CORE (SAAS STRUCTURE)
+# CRM SIMPLE
 # =========================
-
-users_db = {}
-revenue = 0.0
 
 FREE_LIMIT = 5
-
-# user_state:
-# free | pro | vip
-user_state = {}
-
 user_usage = {}
+paid_users = set()
 
-# =========================
-# 📊 TRACK USER
-# =========================
-
-def track_user(user_id, username):
-    if user_id not in users_db:
-        users_db[user_id] = {
-            "username": username,
-            "created_at": datetime.now(),
-            "messages": 0,
-            "payments": 0
-        }
-        user_state[user_id] = "free"
-
-# =========================
-# 🛡 ACCESS LOGIC (SAAS RULES)
-# =========================
-
-def is_allowed(user_id):
-    state = user_state.get(user_id, "free")
-
-    if state in ["pro", "vip"]:
-        return True
-
-    return user_usage.get(user_id, 0) < FREE_LIMIT
+def allowed(user_id):
+    return user_id in paid_users or user_usage.get(user_id, 0) < FREE_LIMIT
 
 def add_usage(user_id):
-    state = user_state.get(user_id, "free")
-
-    if state == "free":
+    if user_id not in paid_users:
         user_usage[user_id] = user_usage.get(user_id, 0) + 1
 
-    if user_id in users_db:
-        users_db[user_id]["messages"] += 1
-
 # =========================
-# 🚀 START
+# START
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    track_user(user.id, user.username)
-
     await update.message.reply_text(
-        "Я АНАСТАСИЯ — карьерный HR SaaS ассистент.\n"
+        "Я АНАСТАСИЯ — карьерный HR-ассистент.\n"
         "Напишите /services"
     )
 
 # =========================
-# 💼 SERVICES (SALES FUNNEL)
+# SERVICES MENU
 # =========================
 
 async def services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("📄 Резюме PRO — 2490₽", callback_data="resume")],
-        [InlineKeyboardButton("🏢 Анализ PRO — 1490₽", callback_data="company")],
-        [InlineKeyboardButton("🎤 Собеседование PRO — 990₽", callback_data="interview")]
+        [InlineKeyboardButton("📄 Резюме — 2490₽", callback_data="resume")],
+        [InlineKeyboardButton("🏢 Анализ компании — 1490₽", callback_data="company")],
+        [InlineKeyboardButton("🎤 Собеседование — 990₽", callback_data="interview")]
     ]
 
     await update.message.reply_text(
-        "💼 SaaS УСЛУГИ АНАСТАСИИ\nВыберите продукт:",
+        "💼 УСЛУГИ АНАСТАСИИ\nВыберите услугу:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# 💳 PAYMENT SYSTEM
-# =========================
-
-async def send_invoice(update, title, price, plan):
-    prices = [LabeledPrice(label=title, amount=int(price * 100))]
-
-    await update.message.bot.send_invoice(
-        chat_id=update.effective_chat.id,
-        title=title,
-        description=f"SaaS доступ: {plan}",
-        payload=plan,
-        provider_token=PROVIDER_TOKEN,
-        currency="RUB",
-        prices=prices
-    )
-
-# =========================
-# 🔘 BUTTON HANDLER
+# PAYMENT (MANUAL)
 # =========================
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,73 +94,51 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "resume":
-        await send_invoice(query, "Резюме PRO", 2490, "pro")
+        text = "📄 РЕЗЮМЕ — 2490₽\n\nОплата:\nСБП / карта: XXXX XXXX XXXX\n\nПосле оплаты нажмите кнопку ниже"
 
     elif query.data == "company":
-        await send_invoice(query, "Анализ PRO", 1490, "pro")
+        text = "🏢 АНАЛИЗ — 1490₽\n\nОплата:\nСБП / карта: XXXX XXXX XXXX\n\nПосле оплаты нажмите кнопку ниже"
 
     elif query.data == "interview":
-        await send_invoice(query, "Собеседование PRO", 990, "pro")
+        text = "🎤 СОБЕСЕДОВАНИЕ — 990₽\n\nОплата:\nСБП / карта: XXXX XXXX XXXX\n\nПосле оплаты нажмите кнопку ниже"
 
-# =========================
-# 💰 PAYMENT CONFIRM (UPGRADE SYSTEM)
-# =========================
+    keyboard = [
+        [InlineKeyboardButton("✅ Я оплатил", callback_data="paid")]
+    ]
 
-async def precheckout(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.pre_checkout_query.answer(ok=True)
-
-async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global revenue
-
-    user = update.effective_user
-
-    user_state[user.id] = "pro"
-
-    if user.id in users_db:
-        users_db[user.id]["payments"] += 1
-
-    revenue += update.message.successful_payment.total_amount / 100
-
-    await update.message.reply_text(
-        "✅ PRO доступ активирован!\nТеперь лимитов нет."
+    await query.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# 👑 ADMIN (FULL SAAS CONTROL)
+# PAYMENT CONFIRM
 # =========================
 
-async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text("Доступ запрещён.")
-        return
+async def paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    free = sum(1 for u in user_state.values() if u == "free")
-    pro = sum(1 for u in user_state.values() if u == "pro")
+    user_id = query.from_user.id
+    paid_users.add(user_id)
 
-    await update.message.reply_text(
-        f"📊 SAAS DASHBOARD\n\n"
-        f"Free users: {free}\n"
-        f"Pro users: {pro}\n"
-        f"Revenue: {revenue:.2f} ₽"
+    await query.message.reply_text(
+        "✅ Оплата подтверждена!\nДоступ открыт."
     )
 
 # =========================
-# 💬 CHAT ENGINE
+# CHAT AI
 # =========================
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+    user_id = update.effective_user.id
     text = update.message.text
 
-    track_user(user.id, user.username)
-
-    if not is_allowed(user.id):
-        await update.message.reply_text(
-            "❌ Лимит бесплатных сообщений исчерпан.\nОформите PRO доступ через /services"
-        )
+    if not allowed(user_id):
+        await update.message.reply_text("Лимит исчерпан. /services")
         return
 
-    add_usage(user.id)
+    add_usage(user_id)
 
     try:
         response = client.chat.completions.create(
@@ -250,22 +154,21 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response.choices[0].message.content[:3500]
         )
 
-    except Exception:
-        await update.message.reply_text("Ошибка сервера.")
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка: {e}")
 
 # =========================
-# ⚙️ APP
+# APP
 # =========================
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("services", services))
-app.add_handler(CommandHandler("admin", admin))
 
 app.add_handler(CallbackQueryHandler(button))
-app.add_handler(PreCheckoutQueryHandler(precheckout))
-app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
+app.add_handler(CallbackQueryHandler(paid, pattern="paid"))
+
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
 app.run_polling()
