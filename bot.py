@@ -1,4 +1,5 @@
 import os
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -9,6 +10,11 @@ from telegram.ext import (
     filters
 )
 from openai import OpenAI
+
+# =========================
+# LOGGING (ВАЖНО ДЛЯ RAILWAY)
+# =========================
+logging.basicConfig(level=logging.INFO)
 
 # =========================
 # KEYS
@@ -70,7 +76,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# SERVICES MENU
+# SERVICES
 # =========================
 
 async def services(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,49 +87,42 @@ async def services(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 УСЛУГИ АНАСТАСИИ\nВыберите услугу:",
+        "💼 УСЛУГИ АНАСТАСИИ",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# PAYMENT (MANUAL)
+# CALLBACK (ОДИН ХЕНДЛЕР)
 # =========================
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "resume":
-        text = "📄 РЕЗЮМЕ — 2490₽\n\nОплата:\nСБП / карта: XXXX XXXX XXXX\n\nПосле оплаты нажмите кнопку ниже"
+    if query.data == "paid":
+        user_id = query.from_user.id
+        paid_users.add(user_id)
 
-    elif query.data == "company":
-        text = "🏢 АНАЛИЗ — 1490₽\n\nОплата:\nСБП / карта: XXXX XXXX XXXX\n\nПосле оплаты нажмите кнопку ниже"
+        await query.message.reply_text(
+            "✅ Оплата подтверждена!\nДоступ открыт."
+        )
+        return
 
-    elif query.data == "interview":
-        text = "🎤 СОБЕСЕДОВАНИЕ — 990₽\n\nОплата:\nСБП / карта: XXXX XXXX XXXX\n\nПосле оплаты нажмите кнопку ниже"
+    texts = {
+        "resume": "📄 РЕЗЮМЕ — 2490₽",
+        "company": "🏢 АНАЛИЗ — 1490₽",
+        "interview": "🎤 СОБЕСЕДОВАНИЕ — 990₽"
+    }
+
+    text = texts.get(query.data, "Ошибка")
 
     keyboard = [
         [InlineKeyboardButton("✅ Я оплатил", callback_data="paid")]
     ]
 
     await query.message.reply_text(
-        text,
+        text + "\n\nОплата: СБП / карта XXXX XXXX XXXX",
         reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-# =========================
-# PAYMENT CONFIRM
-# =========================
-
-async def paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    user_id = query.from_user.id
-    paid_users.add(user_id)
-
-    await query.message.reply_text(
-        "✅ Оплата подтверждена!\nДоступ открыт."
     )
 
 # =========================
@@ -155,7 +154,8 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except Exception as e:
-        await update.message.reply_text(f"Ошибка: {e}")
+        logging.error(e)
+        await update.message.reply_text("Ошибка сервера")
 
 # =========================
 # APP
@@ -167,7 +167,6 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("services", services))
 
 app.add_handler(CallbackQueryHandler(button))
-app.add_handler(CallbackQueryHandler(paid, pattern="paid"))
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
