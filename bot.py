@@ -7,168 +7,118 @@ logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# 💰 ЦЕНЫ (обкатка)
-PRICES = {
-    "resume_basic": 10,
-    "resume_pro": 10,
-    "company": 10,
-    "jobs": 10,
-    "interview": 10
-}
-
 # =========================
-# START MENU (ПОЛНОЕ МЕНЮ)
+# START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [InlineKeyboardButton("📄 Резюме (Базовое)", callback_data="resume_basic")],
-        [InlineKeyboardButton("📄 Резюме (Pro)", callback_data="resume_pro")],
-        [InlineKeyboardButton("🏢 Анализ компании", callback_data="company")],
-        [InlineKeyboardButton("🔎 Поиск вакансий", callback_data="jobs")],
-        [InlineKeyboardButton("🎤 Собеседование", callback_data="interview")]
+        [InlineKeyboardButton("🟢 FREE режим", callback_data="mode_free")],
+        [InlineKeyboardButton("🟡 PRO режим", callback_data="mode_pro")],
+        [InlineKeyboardButton("🔴 VIP режим", callback_data="mode_vip")],
     ]
 
     await update.message.reply_text(
-        "💼 AI Career System\nВыберите действие:",
+        "💼 Career AI System\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 # =========================
-# STEP 2 (УТОЧНЕНИЕ)
+# MODE SELECT
 # =========================
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    action = query.data
+    mode = query.data
 
     # =========================
-    # RESUME BASIC
-    # =========================
-    if action == "resume_basic":
-        text = """
-📄 РЕЗЮМЕ (БАЗОВОЕ)
-
-✔ Формат HeadHunter
-✔ Простая структура
-✔ Быстрая генерация
-
-💰 Цена: 10 ₽
-
-👉 Нажмите оплатить
-"""
-    
-    # =========================
-    # RESUME PRO
-    # =========================
-    elif action == "resume_pro":
-        text = """
-📄 РЕЗЮМЕ (PRO)
-
-✔ Полная структура опыта
-✔ Усиление достижений
-✔ Профессиональная упаковка
-
-💰 Цена: 10 ₽
-
-👉 Нажмите оплатить
-"""
-
-    # =========================
-    # COMPANY ANALYSIS
-    # =========================
-    elif action == "company":
-        text = """
-🏢 АНАЛИЗ КОМПАНИИ
-
-✔ Описание компании
-✔ Риски
-✔ Инсайты
-✔ Вакансии (если есть)
-
-💰 Цена: 10 ₽
-
-👉 Нажмите оплатить
-"""
-
-    # =========================
-    # JOBS
-    # =========================
-    elif action == "jobs":
-        text = """
-🔎 ПОИСК ВАКАНСИЙ
-
-✔ Подбор вакансий
-✔ Ссылки на HH
-✔ Анализ требований
-
-💰 Цена: 10 ₽
-
-👉 Нажмите оплатить
-"""
-
-    # =========================
-    # INTERVIEW
-    # =========================
-    elif action == "interview":
-        text = """
-🎤 СОБЕСЕДОВАНИЕ
-
-✔ HR вопросы
-✔ Подготовка
-✔ Разбор ошибок
-
-💰 Цена: 10 ₽
-
-👉 Нажмите оплатить
-"""
-
-    # =========================
-    # PAYMENT BUTTON (ФИНАЛЬНЫЙ ШАГ)
+    # SERVICES MENU
     # =========================
     keyboard = [
-        [InlineKeyboardButton("💳 ОПЛАТИТЬ 10₽", callback_data=f"pay_{action}")]
+        [InlineKeyboardButton("📄 Резюме", callback_data=f"{mode}_resume")],
+        [InlineKeyboardButton("🏢 Анализ компании", callback_data=f"{mode}_company")],
+        [InlineKeyboardButton("🔎 Поиск вакансий", callback_data=f"{mode}_jobs")],
+        [InlineKeyboardButton("🤝 Помощь в собеседовании", callback_data=f"{mode}_interview")]
+    ]
+
+    mode_name = {
+        "mode_free": "FREE",
+        "mode_pro": "PRO",
+        "mode_vip": "VIP"
+    }[mode]
+
+    await query.message.reply_text(
+        f"📌 Режим: {mode_name}\n\nВыберите действие:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# =========================
+# ACTION HANDLER
+# =========================
+async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    # FIX: понятные тексты
+    texts = {
+        "resume": "📄 Резюме — создание и улучшение",
+        "company": "🏢 Анализ компании — риски, зарплаты, описание",
+        "jobs": "🔎 Поиск вакансий — подбор и ссылки",
+        "interview": "🤝 Помощь в собеседовании — вопросы и подготовка"
+    }
+
+    # извлекаем действие
+    action = data.split("_")[1]
+
+    text = texts.get(action, "Ошибка")
+
+    keyboard = [
+        [InlineKeyboardButton("💳 Продолжить", callback_data=f"pay_{data}")]
     ]
 
     await query.message.reply_text(
-        text,
+        f"{text}\n\n💰 Доступ зависит от выбранного режима",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 # =========================
-# PAYMENT STEP (ПОКА ЗАГЛУШКА, НО ПРАВИЛЬНАЯ ЛОГИКА)
+# PAYMENT STEP (ЗАГЛУШКА ПОКА)
 # =========================
-async def payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def pay_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    action = query.data.replace("pay_", "")
+    data = query.data.replace("pay_", "")
 
     await query.message.reply_text(
         f"""
-💳 ОПЛАТА ЗАПУЩЕНА
+💳 ОПЛАТА
 
-Услуга: {action}
-Сумма: 10 ₽
+Услуга: {data}
 
-👉 Здесь позже подключается Tinkoff Pay
+👉 Здесь будет Tinkoff Pay
 👉 После оплаты откроется результат
 """
     )
 
 
 # =========================
-# RUN APP
+# APP
 # =========================
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(payment, pattern="pay_"))
-app.add_handler(CallbackQueryHandler(button))
+app.add_handler(CallbackQueryHandler(mode_handler, pattern="mode_"))
+app.add_handler(CallbackQueryHandler(action_handler, pattern=".*_(resume|company|jobs|interview)$"))
+app.add_handler(CallbackQueryHandler(pay_handler, pattern="pay_"))
 
 app.run_polling()
