@@ -2,30 +2,43 @@ import os
 import logging
 import uuid
 import requests
+import psycopg2
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# =========================
-# CONFIG
-# =========================
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-TINKOFF_KEY = os.getenv("TINKOFF_TERMINAL_KEY")
-
 logging.basicConfig(level=logging.INFO)
 
-# =========================
-# SIMPLE STATE
-# =========================
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+TINKOFF_KEY = os.getenv("TINKOFF_TERMINAL_KEY")
+
 USER_STATE = {}
 
 # =========================
-# TINKOFF PAYMENT (INLINE)
+# DB CHECK ACCESS
+# =========================
+def check_access(user_id):
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+
+        cur.execute("SELECT status FROM users WHERE user_id=%s", (user_id,))
+        row = cur.fetchone()
+
+        conn.close()
+
+        return row and row[0] == "PAID"
+    except:
+        return False
+
+
+# =========================
+# PAYMENT
 # =========================
 def create_payment(user_id, service, amount=10):
 
     url = "https://securepay.tinkoff.ru/v2/Init"
-
     order_id = str(uuid.uuid4())
 
     payload = {
@@ -58,7 +71,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 Career SaaS V2\nВыберите услугу:",
+        "💼 SaaS V3 SYSTEM",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -75,30 +88,35 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     # =========================
-    # SERVICES → PAYMENT
+    # ACCESS CHECK (ВАЖНО)
     # =========================
-    if data in ["resume", "company", "jobs", "interview"]:
-
-        USER_STATE[user_id] = data
-
-        payment_url = create_payment(
-            user_id=user_id,
-            service=data,
-            amount=10
-        )
+    if not check_access(user_id):
+        payment_url = create_payment(user_id, data, 10)
 
         await query.message.reply_text(
-            f"""
-💳 Услуга: {data}
-💰 Цена: 10₽
-
-👉 Оплатите по ссылке:
-{payment_url}
-
-После оплаты доступ будет открыт автоматически (V3 добавим webhook).
-"""
+            f"⛔ Доступ не активирован\n\n💳 Оплата:\n{payment_url}"
         )
         return
+
+    # =========================
+    # SERVICES (ПОСЛЕ ОПЛАТЫ)
+    # =========================
+    if data == "resume":
+        text = "📄 Отправьте: ФИО, опыт, образование"
+
+    elif data == "company":
+        text = "🏢 Отправьте: компания + город"
+
+    elif data == "jobs":
+        text = "🔎 Отправьте: должность + город"
+
+    elif data == "interview":
+        text = "🤝 Подготовка к собеседованию активна"
+
+    else:
+        text = "Ошибка"
+
+    await query.message.reply_text(text)
 
 
 # =========================
