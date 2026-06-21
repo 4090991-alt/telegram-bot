@@ -37,7 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V3\n\nВыберите режим:",
+        "💼 CAREER ENGINE V3.1\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -93,7 +93,7 @@ def interview_engine(mode):
     }.get(mode, "free")
 
 # =========================
-# PDF GENERATOR (STABLE)
+# PDF GENERATOR (UPGRADED)
 # =========================
 def generate_pdf(data):
 
@@ -103,15 +103,42 @@ def generate_pdf(data):
 
     y = 800
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(100, y, "RESUME - CAREER ENGINE")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(100, y, "ПРОФЕССИОНАЛЬНОЕ РЕЗЮМЕ")
     y -= 40
 
-    c.setFont("Helvetica", 11)
+    c.setFont("Helvetica", 12)
 
-    for key, value in data.items():
-        c.drawString(100, y, f"{key}: {value}")
-        y -= 25
+    # ФИО
+    c.drawString(100, y, "ФИО / ДОЛЖНОСТЬ:")
+    y -= 20
+    c.drawString(120, y, data.get("ФИО", ""))
+    y -= 40
+
+    # ОПЫТ
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(100, y, "ОПЫТ РАБОТЫ:")
+    y -= 20
+
+    c.setFont("Helvetica", 11)
+    for line in data.get("Опыт", "").split("\n"):
+        c.drawString(120, y, f"• {line}")
+        y -= 18
+
+    y -= 20
+
+    # ОБРАЗОВАНИЕ
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(100, y, "ОБРАЗОВАНИЕ И НАВЫКИ:")
+    y -= 20
+
+    c.setFont("Helvetica", 11)
+    for line in data.get("Образование", "").split("\n"):
+        c.drawString(120, y, f"• {line}")
+        y -= 18
+
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawString(100, 50, "AI Career Engine V3.1")
 
     c.save()
 
@@ -130,7 +157,10 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = USER_MODE.get(user_id, "free")
 
     if action == "resume":
-        USER_RESUME[user_id] = {"step": 1, "data": {}}
+        USER_RESUME[user_id] = {
+            "step": 1,
+            "data": {}
+        }
         await query.message.reply_text("📌 Введите ФИО и должность:")
         return
 
@@ -146,10 +176,10 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(interview_engine(mode))
         return
 
-    await query.message.reply_text("❌ Неизвестное действие")
+    await query.message.reply_text("❌ Ошибка действия")
 
 # =========================
-# RESUME FLOW + PDF
+# RESUME FLOW (STABLE)
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -161,18 +191,21 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state = USER_RESUME[user_id]
 
+    # STEP 1
     if state["step"] == 1:
         state["data"]["ФИО"] = text
         state["step"] = 2
         await update.message.reply_text("📌 Опыт работы (по годам):")
         return
 
+    # STEP 2
     if state["step"] == 2:
         state["data"]["Опыт"] = text
         state["step"] = 3
         await update.message.reply_text("📌 Образование и навыки:")
         return
 
+    # STEP 3 → PDF FINAL
     if state["step"] == 3:
         state["data"]["Образование"] = text
 
@@ -184,7 +217,7 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_document(
                 document=f,
                 filename="resume.pdf",
-                caption="📄 Ваше резюме готово (PDF)"
+                caption="📄 Ваше профессиональное резюме готово"
             )
 
 # =========================
