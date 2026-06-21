@@ -9,12 +9,12 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 # =========================
-# USER STATE
+# STATE
 # =========================
 USER_MODE = {}
 
 # =========================
-# START (выбор режима)
+# START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -59,7 +59,7 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# ENGINE CORE (по твоей схеме)
+# ENGINE CORE
 # =========================
 def resume_engine(mode):
     if mode == "free":
@@ -124,13 +124,21 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# RUN APP
+# APP START (ВАЖНО FIX RAILWAY)
 # =========================
-app = ApplicationBuilder().token(TOKEN).build()
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start))
 
-app.add_handler(CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$"))
-app.add_handler(CallbackQueryHandler(action_handler))
+    app.add_handler(
+        CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$")
+    )
 
-app.run_polling()
+    app.add_handler(CallbackQueryHandler(action_handler))
+
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
