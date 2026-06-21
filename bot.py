@@ -1,5 +1,9 @@
 import os
 import logging
+import tempfile
+
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -33,7 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V1\n\nВыберите режим:",
+        "💼 CAREER ENGINE V3\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -67,13 +71,6 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # ENGINE CORE
 # =========================
-def resume_engine(mode):
-    return {
-        "free": "📄 FREE резюме (HH формат)\n👉 ФИО + опыт + образование",
-        "pro": "📄 PRO резюме\n👉 Опыт по годам + навыки + достижения",
-        "vip": "📄 VIP резюме\n👉 Под вакансию + стратегия + усиление"
-    }[mode]
-
 def company_engine(mode):
     return {
         "free": "🏢 Базовый анализ компании",
@@ -85,15 +82,37 @@ def jobs_engine(mode):
     return {
         "free": "🔎 Базовые вакансии (ссылки)",
         "pro": "🔎 Расширенный подбор + сравнение вакансий",
-        "vip": "🔎 Вакансии + стратегия выбора работодателя"
+        "vip": "🔎 Вакансии + стратегия выбора"
     }[mode]
 
 def interview_engine(mode):
     return {
         "free": "🤝 Базовые HR вопросы",
         "pro": "🤝 HR + разбор ответов",
-        "vip": "🤝 Полная симуляция интервью + стресс тест"
+        "vip": "🤝 Полная симуляция интервью"
     }[mode]
+
+# =========================
+# PDF GENERATOR
+# =========================
+def generate_pdf(data):
+
+    file_path = tempfile.mktemp(suffix=".pdf")
+
+    c = canvas.Canvas(file_path, pagesize=A4)
+
+    y = 800
+
+    c.drawString(100, y, "RESUME - CAREER ENGINE")
+    y -= 40
+
+    for key, value in data.items():
+        c.drawString(100, y, f"{key.upper()}: {value}")
+        y -= 30
+
+    c.save()
+
+    return file_path
 
 # =========================
 # ACTION HANDLER
@@ -107,28 +126,26 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = query.data
     mode = USER_MODE.get(user_id, "free")
 
-    # 🚀 RESUME V2 START FLOW
     if action == "resume":
+
         USER_RESUME[user_id] = {"step": 1, "data": {}}
         await query.message.reply_text("📌 Введите ФИО и должность:")
         return
 
     elif action == "company":
-        text = company_engine(mode)
+        await query.message.reply_text(company_engine(mode))
+        return
 
     elif action == "jobs":
-        text = jobs_engine(mode)
+        await query.message.reply_text(jobs_engine(mode))
+        return
 
     elif action == "interview":
-        text = interview_engine(mode)
-
-    else:
-        text = "Ошибка действия"
-
-    await query.message.reply_text(text)
+        await query.message.reply_text(interview_engine(mode))
+        return
 
 # =========================
-# RESUME FLOW V2 (HR ENGINE)
+# RESUME FLOW + PDF FINAL
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -139,42 +156,34 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     state = USER_RESUME[user_id]
-    mode = USER_MODE.get(user_id, "free")
 
+    # STEP 1
     if state["step"] == 1:
         state["data"]["main"] = text
         state["step"] = 2
-        await update.message.reply_text("📌 Введите опыт работы (по годам):")
+        await update.message.reply_text("📌 Опыт работы (по годам):")
         return
 
+    # STEP 2
     if state["step"] == 2:
         state["data"]["experience"] = text
         state["step"] = 3
-        await update.message.reply_text("📌 Введите образование и навыки:")
+        await update.message.reply_text("📌 Образование и навыки:")
         return
 
+    # STEP 3 → PDF
     if state["step"] == 3:
         state["data"]["education"] = text
 
-        result = f"""
-📄 ГОТОВОЕ РЕЗЮМЕ
-
-👤 {state['data']['main']}
-
-💼 ОПЫТ:
-{state['data']['experience']}
-
-🎓 ОБРАЗОВАНИЕ / НАВЫКИ:
-{state['data']['education']}
-
----
-✔ Формат: HeadHunter
-✔ Режим: {mode.upper()}
-"""
+        pdf_file = generate_pdf(state["data"])
 
         USER_RESUME[user_id] = {}
 
-        await update.message.reply_text(result)
+        await update.message.reply_document(
+            document=open(pdf_file, "rb"),
+            filename="resume.pdf",
+            caption="📄 Ваше резюме готово (PDF)"
+        )
 
 # =========================
 # APP
