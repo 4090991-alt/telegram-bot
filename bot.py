@@ -33,7 +33,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V6 (SAAS ARCHITECTURE)\n\nВыберите режим:",
+        "💼 CAREER ENGINE V6 (SAAS CONNECTOR)\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -51,8 +51,7 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
         [InlineKeyboardButton("🏢 Компания", callback_data="company")],
         [InlineKeyboardButton("🔎 Вакансии", callback_data="jobs")],
-        [InlineKeyboardButton("🤝 HR", callback_data="interview")],
-        [InlineKeyboardButton("🌐 Сайт", callback_data="site")]
+        [InlineKeyboardButton("🤝 Интервью", callback_data="interview")]
     ]
 
     await q.message.reply_text(
@@ -61,53 +60,67 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# ENGINE
+# ENGINE (PROFESSIONAL FIXED)
 # =========================
 def engine(mode, action):
 
-    if mode == "free":
-        return {
-            "resume": "📄 FREE резюме",
-            "company": "🏢 базовый анализ",
-            "jobs": "🔎 базовые вакансии",
-            "interview": "🤝 HR вопросы",
-            "site": "🌐 простая визитка"
-        }.get(action)
+    data = {
+        "free": {
+            "resume": "📄 FREE резюме (HH формат)",
+            "company": "🏢 Базовый анализ компании",
+            "jobs": "🔎 Базовые вакансии",
+            "interview": "🤝 Базовые HR вопросы"
+        },
+        "pro": {
+            "resume": "📄 PRO: опыт + достижения + усиление",
+            "company": "🏢 PRO: зарплаты + риски + структура",
+            "jobs": "🔎 PRO: сравнение вакансий + стратегия",
+            "interview": "🤝 PRO: разбор ответов + улучшение"
+        },
+        "vip": {
+            "resume": "📄 VIP: позиционирование кандидата",
+            "company": "🏢 VIP: стратегия входа в компанию",
+            "jobs": "🔎 VIP: карьерная стратегия",
+            "interview": "🤝 VIP: симуляция интервью"
+        }
+    }
 
-    if mode == "pro":
-        return {
-            "resume": "📄 PRO резюме (усиление)",
-            "company": "🏢 зарплаты + риски + рынок",
-            "jobs": "🔎 сравнение вакансий",
-            "interview": "🤝 разбор ответов",
-            "site": "🌐 PRO структура сайта"
-        }.get(action)
-
-    return {
-        "resume": "📄 VIP позиционирование",
-        "company": "🏢 стратегия входа",
-        "jobs": "🔎 карьерная стратегия",
-        "interview": "🤝 симуляция интервью",
-        "site": "🌐 VIP лендинг"
-    }.get(action)
+    return data.get(mode, data["free"]).get(action, "❌ нет данных")
 
 # =========================
 # CONNECTOR (КАРТА СВЯЗЕЙ)
 # =========================
 def connector(action):
 
-    return {
-        "resume": ["PRO анализ", "вакансии", "HR", "сайт"],
-        "company": ["резюме", "вакансии", "VIP стратегия"],
-        "jobs": ["резюме", "HR", "VIP стратегия"],
-        "interview": ["резюме", "вакансии", "VIP"],
-        "site": ["резюме", "PRO анализ", "вакансии"]
-    }.get(action, [])
+    map_links = {
+        "resume": [
+            "➡️ PRO анализ компании",
+            "➡️ вакансии под профиль",
+            "➡️ HR симуляция"
+        ],
+        "company": [
+            "➡️ улучшить резюме под рынок",
+            "➡️ вакансии этой отрасли",
+            "➡️ VIP стратегия входа"
+        ],
+        "jobs": [
+            "➡️ усилить резюме",
+            "➡️ HR подготовка",
+            "➡️ VIP стратегия"
+        ],
+        "interview": [
+            "➡️ усилить резюме",
+            "➡️ вакансии",
+            "➡️ VIP стратегия"
+        ]
+    }
+
+    return map_links.get(action, [])
 
 # =========================
-# ACTION ROUTER
+# ACTION ROUTER (SAFE)
 # =========================
-async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not update.callback_query:
         return
@@ -119,8 +132,12 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = q.data
     mode = USER_MODE.get(user_id, "free")
 
-    result = engine(mode, action)
+    if action == "resume":
+        USER_FLOW[user_id] = {"step": 1, "data": {}}
+        await q.message.reply_text("📌 Введите ФИО:")
+        return
 
+    result = engine(mode, action)
     await q.message.reply_text(result)
 
     next_steps = connector(action)
@@ -131,7 +148,7 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =========================
-# FLOW (RESUME MINIMAL SAFE)
+# RESUME FLOW (SAFE)
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -144,23 +161,26 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     flow = USER_FLOW[user_id]
 
     if flow["step"] == 1:
+        flow["data"]["fio"] = text
         flow["step"] = 2
-        flow["data"] = {"fio": text}
-        await update.message.reply_text("Опыт:")
+        await update.message.reply_text("📌 Опыт работы:")
         return
 
     if flow["step"] == 2:
-        flow["step"] = 3
         flow["data"]["exp"] = text
-        await update.message.reply_text("Образование:")
+        flow["step"] = 3
+        await update.message.reply_text("📌 Образование:")
         return
 
     if flow["step"] == 3:
         flow["data"]["edu"] = text
+
         USER_FLOW[user_id] = {}
 
         await update.message.reply_text(
-            "✔ готово\n➡️ выбери следующий шаг из системы"
+            "📄 ГОТОВО\n\n"
+            "✔ данные собраны\n"
+            "➡️ выбери следующий шаг в системе"
         )
 
 # =========================
@@ -172,7 +192,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$"))
-    app.add_handler(CallbackQueryHandler(handler))
+    app.add_handler(CallbackQueryHandler(action_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
     app.run_polling()
