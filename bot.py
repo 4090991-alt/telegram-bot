@@ -34,7 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE v7 (CONNECTOR SYSTEM)\n\nВыберите режим:",
+        "💼 CAREER ENGINE V5.1\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -53,10 +53,9 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
-        [InlineKeyboardButton("🏢 Компания", callback_data="company")],
+        [InlineKeyboardButton("🏢 Анализ", callback_data="company")],
         [InlineKeyboardButton("🔎 Вакансии", callback_data="jobs")],
-        [InlineKeyboardButton("🤝 HR", callback_data="interview")],
-        [InlineKeyboardButton("🌐 Сайт-визитка", callback_data="site")]
+        [InlineKeyboardButton("🤝 Интервью", callback_data="interview")],
     ]
 
     await q.message.reply_text(
@@ -65,91 +64,68 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# CORE ENGINE
+# ENGINE CORE (SAFE)
 # =========================
 def engine(mode, action):
 
-    # FREE
     if mode == "free":
         return {
             "resume": "📄 FREE резюме (HH формат)",
             "company": "🏢 Базовый анализ компании",
             "jobs": "🔎 Базовые вакансии",
             "interview": "🤝 Базовые HR вопросы",
-            "site": "🌐 Простая визитка"
-        }[action]
+        }.get(action, "❌ неизвестно")
 
-    # PRO (усиленная логика)
     if mode == "pro":
         return {
-            "resume": "📄 PRO резюме: опыт + достижения + усиление",
-            "company": "🏢 PRO анализ: зарплаты + риски + структура",
+            "resume": "📄 PRO: опыт + достижения + усиление",
+            "company": "🏢 PRO: зарплаты + риски + структура",
             "jobs": "🔎 PRO: сравнение вакансий + стратегия",
             "interview": "🤝 PRO: разбор ответов + улучшение",
-            "site": "🌐 PRO сайт-визитка: структура + блоки + CTA"
-        }[action]
+        }.get(action, "❌ неизвестно")
 
-    # VIP (стратегия)
     return {
         "resume": "📄 VIP: позиционирование кандидата",
-        "company": "🏢 VIP: стратегия входа в компанию",
+        "company": "🏢 VIP: стратегия входа",
         "jobs": "🔎 VIP: карьерная стратегия",
         "interview": "🤝 VIP: симуляция интервью",
-        "site": "🌐 VIP сайт: продающий лендинг + оффер"
-    }[action]
+    }.get(action, "❌ неизвестно")
 
 # =========================
-# 🔥 CONNECTOR ENGINE (ГЛАВНОЕ ИЗ КАРТЫ)
+# CONNECTOR (СВЯЗИ КАРТЫ)
 # =========================
 def connector(action):
 
-    if action == "resume":
-        return [
-            "➡️ Рекомендуем: PRO анализ компании",
-            "➡️ Или: вакансии под резюме",
-            "➡️ Или: HR симулятор"
+    return {
+        "resume": [
+            "➡️ PRO анализ компании",
+            "➡️ вакансии под резюме",
+            "➡️ HR симуляция"
+        ],
+        "company": [
+            "➡️ улучшить резюме под рынок",
+            "➡️ вакансии этой сферы",
+            "➡️ VIP стратегия"
+        ],
+        "jobs": [
+            "➡️ усилить резюме (PRO)",
+            "➡️ HR подготовка",
+            "➡️ VIP стратегия входа"
+        ],
+        "interview": [
+            "➡️ усилить резюме",
+            "➡️ вакансии",
+            "➡️ VIP стратегия"
         ]
-
-    if action == "company":
-        return [
-            "➡️ Рекомендуем: улучшить резюме под компанию",
-            "➡️ Или: вакансии этой сферы",
-            "➡️ Или: VIP стратегия"
-        ]
-
-    if action == "jobs":
-        return [
-            "➡️ Рекомендуем: усилить резюме (PRO)",
-            "➡️ Или: HR подготовка",
-            "➡️ Или: VIP стратегия входа"
-        ]
-
-    if action == "interview":
-        return [
-            "➡️ Рекомендуем: усилить резюме",
-            "➡️ Или: вакансии",
-            "➡️ Или: VIP стратегия"
-        ]
-
-    if action == "site":
-        return [
-            "➡️ Рекомендуем: создать резюме",
-            "➡️ Или: PRO анализ",
-            "➡️ Или: вакансии + HR"
-        ]
-
-    return []
+    }.get(action, [])
 
 # =========================
-# PAYMENT PLACEHOLDER (НЕ АКТИВЕН)
+# ACTION ROUTER (FIXED)
 # =========================
-def payment_placeholder():
-    return "💳 PAYMENT LAYER: DISABLED (READY FOR FUTURE INTEGRATION)"
+async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-# =========================
-# HANDLER
-# =========================
-async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.callback_query:
+        return
 
     q = update.callback_query
     await q.answer()
@@ -158,25 +134,22 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = q.data
     mode = USER_MODE.get(user_id, "free")
 
-    if action in ["resume", "company", "jobs", "interview", "site"]:
+    if action == "resume":
+        USER_FLOW[user_id] = {"step": 1, "data": {}}
+        await q.message.reply_text("📌 Введите ФИО:")
+        return
 
-        if action == "resume":
-            USER_FLOW[user_id] = {"step": 1, "data": {}}
-            await q.message.reply_text("📌 Введите ФИО:")
-            return
+    result = engine(mode, action)
+    await q.message.reply_text(result)
 
-        result = engine(mode, action)
-        await q.message.reply_text(result)
-
-        # 🔥 ВАЖНО: СВЯЗИ ИЗ КАРТЫ
-        suggestions = connector(action)
-
+    next_steps = connector(action)
+    if next_steps:
         await q.message.reply_text(
-            "🔗 СЛЕДУЮЩИЕ ШАГИ:\n\n" + "\n".join(suggestions)
+            "🔗 СЛЕДУЮЩИЕ ШАГИ:\n" + "\n".join(next_steps)
         )
 
 # =========================
-# RESUME FLOW
+# RESUME FLOW (STABLE)
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -206,9 +179,9 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         USER_FLOW[user_id] = {}
 
         await update.message.reply_text(
-            "📄 РЕЗУЛЬТАТ ГОТОВ\n\n"
-            "✔ система завершила обработку\n"
-            "🔗 теперь выбери следующий шаг"
+            "📄 ГОТОВО\n\n"
+            "✔ данные собраны\n"
+            "➡️ выбери следующий шаг"
         )
 
 # =========================
@@ -220,7 +193,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$"))
-    app.add_handler(CallbackQueryHandler(handler))
+    app.add_handler(CallbackQueryHandler(action_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
     app.run_polling()
