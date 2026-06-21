@@ -5,3 +5,6 @@ fastapi
 uvicorn
 python-telegram-bot==20.7
 reportlab
+python-telegram-bot==20.7
+psycopg2-binary
+reportlab
