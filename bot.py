@@ -1,8 +1,6 @@
 import os
 import logging
 import uuid
-import base64
-import requests
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -10,47 +8,21 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-CLOUD_PUBLIC_ID = os.getenv("CLOUD_PUBLIC_ID")
-CLOUD_API_SECRET = os.getenv("CLOUD_API_SECRET")
 
 # =========================
-# STATE (простое хранение)
+# STATE
 # =========================
 USER_STATE = {}
 
 # =========================
-# PAYMENT (CloudPayments ONLY)
+# TEST PAYMENT (STABLE MODE)
 # =========================
 def create_payment(user_id, service, amount=10):
 
-    auth = base64.b64encode(
-        f"{CLOUD_PUBLIC_ID}:{CLOUD_API_SECRET}".encode()
-    ).decode()
+    # 💣 ТЕСТОВАЯ СИСТЕМА (без банка, без API)
+    fake_url = f"https://pay.test.local/pay?user={user_id}&service={service}&amount={amount}"
 
-    headers = {
-        "Authorization": f"Basic {auth}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "Amount": amount,
-        "Currency": "RUB",
-        "Description": service,
-        "InvoiceId": str(uuid.uuid4()),
-        "JsonData": {
-            "user_id": user_id,
-            "service": service
-        }
-    }
-
-    r = requests.post(
-        "https://api.cloudpayments.ru/payments/charges",
-        json=payload,
-        headers=headers
-    )
-
-    data = r.json()
-    return data.get("Model", {}).get("Url")
+    return fake_url
 
 
 # =========================
@@ -66,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 Career System STABLE V1",
+        "💼 Career System STABLE V1 (TEST MODE)",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -82,23 +54,24 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
 
-    # сохраняем выбор
     USER_STATE[user_id] = data
 
     # =========================
-    # PAYMENT FLOW
+    # PAYMENT FLOW (TEST)
     # =========================
     payment_url = create_payment(user_id, data, 10)
 
     await query.message.reply_text(
         f"""
 💳 Услуга: {data}
-💰 Цена: 10₽
+💰 Цена: 10₽ (TEST MODE)
 
-👉 Оплатите по ссылке:
+👉 Ссылка оплаты:
 {payment_url}
 
-После оплаты доступ будет открыт (следующий этап V3).
+⚠️ Это тестовый режим (без реальной оплаты)
+
+После оплаты (симуляция) будет следующий этап V3.
 """
     )
 
