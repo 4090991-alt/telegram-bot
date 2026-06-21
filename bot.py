@@ -1,10 +1,5 @@
 import os
 import logging
-import psycopg2
-import tempfile
-
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -19,105 +14,6 @@ from telegram.ext import (
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-# =========================
-# DB
-# =========================
-def db_conn():
-    return psycopg2.connect(DATABASE_URL)
-
-def save_user(user_id, mode):
-    try:
-        conn = db_conn()
-        cur = conn.cursor()
-
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            mode TEXT,
-            score INT DEFAULT 0
-        )
-        """)
-
-        cur.execute("""
-        INSERT INTO users (user_id, mode)
-        VALUES (%s, %s)
-        ON CONFLICT (user_id) DO UPDATE SET mode = EXCLUDED.mode
-        """, (user_id, mode))
-
-        conn.commit()
-        conn.close()
-
-    except Exception as e:
-        logging.error(e)
-
-def update_score(user_id, score):
-    try:
-        conn = db_conn()
-        cur = conn.cursor()
-
-        cur.execute("""
-        UPDATE users SET score=%s WHERE user_id=%s
-        """, (score, user_id))
-
-        conn.commit()
-        conn.close()
-
-    except Exception as e:
-        logging.error(e)
-
-# =========================
-# AI
-# =========================
-def scoring_engine(text):
-    score = 50
-    if "опыт" in text.lower():
-        score += 10
-    if "достижения" in text.lower():
-        score += 15
-    if "20" in text:
-        score += 10
-    return min(score, 100)
-
-def ai_resume_generator(data):
-    return f"""
-ПРОФЕССИОНАЛЬНОЕ РЕЗЮМЕ
-
-ФИО:
-{data.get('fio')}
-
-ОПЫТ:
-{data.get('exp')}
-
-ОБРАЗОВАНИЕ:
-{data.get('edu')}
-"""
-
-# =========================
-# PDF ENGINE (FIX)
-# =========================
-def generate_pdf(data):
-
-    file_path = tempfile.mktemp(suffix=".pdf")
-    c = canvas.Canvas(file_path, pagesize=A4)
-
-    y = 800
-
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(100, y, "AI RESUME - CAREER ENGINE V7")
-    y -= 40
-
-    c.setFont("Helvetica", 12)
-
-    for key in ["fio", "exp", "edu"]:
-        c.drawString(100, y, f"{key.upper()}:")
-        y -= 20
-        c.drawString(120, y, str(data.get(key, "")))
-        y -= 40
-
-    c.save()
-    return file_path
 
 # =========================
 # STATE
@@ -137,12 +33,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "🚀 CAREER ENGINE V7 PRODUCTION\n\nВыберите режим:",
+        "💼 CAREER ENGINE V6 (CONNECTOR SYSTEM)\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# MODE
+# MODE SELECTOR
 # =========================
 async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -150,7 +46,6 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     USER_MODE[q.from_user.id] = q.data
-    save_user(q.from_user.id, q.data)
 
     keyboard = [
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
@@ -160,32 +55,108 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await q.message.reply_text(
-        f"✅ MODE: {q.data.upper()}",
+        f"✅ MODE: {q.data.upper()}\n\nВыберите действие:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# ROUTER
+# ENGINE (NO DEAD LOGIC)
 # =========================
-async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def engine(mode, action):
+
+    base = {
+        "free": {
+            "resume": "📄 FREE резюме (HH формат)",
+            "company": "🏢 Базовый анализ компании",
+            "jobs": "🔎 Базовые вакансии",
+            "interview": "🤝 Базовые HR вопросы"
+        },
+        "pro": {
+            "resume": "📄 PRO резюме: опыт + достижения + усиление",
+            "company": "🏢 PRO анализ: зарплаты + риски + структура",
+            "jobs": "🔎 PRO подбор: сравнение + стратегия рынка",
+            "interview": "🤝 PRO интервью: разбор + улучшение ответов"
+        },
+        "vip": {
+            "resume": "📄 VIP стратегия позиционирования",
+            "company": "🏢 VIP стратегия входа в компанию",
+            "jobs": "🔎 VIP карьерная стратегия",
+            "interview": "🤝 VIP симуляция + стресс интервью"
+        }
+    }
+
+    return base.get(mode, base["free"]).get(action, "❌ действие не найдено")
+
+# =========================
+# CONNECTOR MAP (ГЛАВНАЯ ЛОГИКА СХЕМЫ)
+# =========================
+def connector(action):
+
+    map_flow = {
+        "resume": [
+            "➡️ PRO анализ компании",
+            "➡️ подбор вакансий",
+            "➡️ HR интервью"
+        ],
+        "company": [
+            "➡️ улучшить резюме под рынок",
+            "➡️ вакансии отрасли",
+            "➡️ VIP стратегия входа"
+        ],
+        "jobs": [
+            "➡️ усилить резюме",
+            "➡️ HR подготовка",
+            "➡️ VIP стратегия"
+        ],
+        "interview": [
+            "➡️ усилить резюме",
+            "➡️ вакансии",
+            "➡️ VIP стратегия"
+        ]
+    }
+
+    return map_flow.get(action, [])
+
+# =========================
+# ROUTER (SAFE FIXED)
+# =========================
+async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q = update.callback_query
+
+    if not q:
+        return
+
     await q.answer()
 
     user_id = q.from_user.id
     action = q.data
+    mode = USER_MODE.get(user_id, "free")
 
+    # INIT FLOW
     if action == "resume":
         USER_FLOW[user_id] = {"step": 1, "data": {}}
-        await q.message.reply_text("📌 Введите ФИО:")
+        await q.message.reply_text("📌 Введите ФИО и должность:")
         return
 
-    await q.message.reply_text("⚙️ функция в разработке")
+    # ENGINE RESPONSE
+    result = engine(mode, action)
+    await q.message.reply_text(result)
+
+    # CONNECTOR (NEVER EMPTY RESPONSE FLOW)
+    next_steps = connector(action)
+
+    if next_steps:
+        await q.message.reply_text(
+            "🔗 СЛЕДУЮЩИЕ ШАГИ:\n" + "\n".join(next_steps)
+        )
+    else:
+        await q.message.reply_text("➡️ Выберите следующий модуль в меню")
 
 # =========================
-# FLOW + PDF FIX
+# RESUME FLOW (SAFE NO DEADLOCK)
 # =========================
-async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.message.from_user.id
     text = update.message.text
@@ -194,37 +165,33 @@ async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     flow = USER_FLOW[user_id]
+    step = flow.get("step", 1)
 
-    if flow["step"] == 1:
+    if step == 1:
         flow["data"]["fio"] = text
         flow["step"] = 2
-        await update.message.reply_text("📌 Опыт:")
+        await update.message.reply_text("📌 Опыт работы:")
         return
 
-    if flow["step"] == 2:
+    if step == 2:
         flow["data"]["exp"] = text
         flow["step"] = 3
         await update.message.reply_text("📌 Образование:")
         return
 
-    if flow["step"] == 3:
+    if step == 3:
         flow["data"]["edu"] = text
-
-        score = scoring_engine(text)
-        update_score(user_id, score)
-
-        pdf_file = generate_pdf(flow["data"])
 
         USER_FLOW[user_id] = {}
 
-        await update.message.reply_document(
-            document=open(pdf_file, "rb"),
-            filename="resume.pdf",
-            caption=f"📄 Резюме готово | SCORE: {score}/100"
+        await update.message.reply_text(
+            "📄 ГОТОВО\n\n"
+            "✔ резюме собрано\n"
+            "➡️ теперь выбери: PRO анализ / вакансии / интервью"
         )
 
 # =========================
-# APP
+# MAIN
 # =========================
 def main():
 
@@ -232,8 +199,8 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$"))
-    app.add_handler(CallbackQueryHandler(handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, flow))
+    app.add_handler(CallbackQueryHandler(action_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
     app.run_polling()
 
