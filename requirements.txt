@@ -3,3 +3,5 @@ requests
 psycopg2-binary
 fastapi
 uvicorn
+python-telegram-bot==20.7
+reportlab
