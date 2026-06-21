@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 # =========================
-# STATE LAYER (SAFE)
+# STATE (CLEAN)
 # =========================
 USER_MODE = {}
 USER_FLOW = {}
@@ -37,7 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V4.2\n\nВыберите режим:",
+        "💼 CAREER ENGINE V4.3\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -67,31 +67,82 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# ENGINE CORE (SAFE)
+# ENGINE CORE (PRO UPGRADED)
 # =========================
 def company_engine(mode):
-    return {
-        "free": "🏢 Базовый анализ",
-        "pro": "🏢 Зарплаты + риски + отзывы",
-        "vip": "🏢 Стратегия трудоустройства"
-    }.get(mode, "free")
+
+    if mode == "free":
+        return "🏢 Базовый анализ компании"
+
+    if mode == "pro":
+        return """
+🏢 PRO ГЛУБОКИЙ АНАЛИЗ
+
+💰 Зарплаты:
+- ниже рынка / рынок / выше рынка
+
+⚠️ Риски:
+- нагрузка
+- стабильность отдела
+
+📊 Стабильность:
+- средняя
+
+🧠 Стратегия:
+- вход через базовую позицию
+- усиление резюме под роль
+"""
+
+    return "🏢 VIP стратегический анализ"
 
 def jobs_engine(mode):
-    return {
-        "free": "🔎 Базовые вакансии",
-        "pro": "🔎 Сравнение + расширенный подбор",
-        "vip": "🔎 Карьерная стратегия"
-    }.get(mode, "free")
+
+    if mode == "free":
+        return "🔎 Базовые вакансии"
+
+    if mode == "pro":
+        return """
+🔎 PRO ВАКАНСИИ
+
+📊 Анализ рынка:
+- сравни 10+ вакансий
+
+💰 Зарплаты:
+- ориентируйся на медиану рынка
+
+⚠️ Риски:
+- размытые обязанности = риск
+
+🎯 Стратегия:
+- выбирать стабильные компании
+"""
+
+    return "🔎 VIP стратегия карьеры"
 
 def interview_engine(mode):
-    return {
-        "free": "🤝 Базовые HR вопросы",
-        "pro": "🤝 Разбор ответов",
-        "vip": "🤝 Симуляция интервью"
-    }.get(mode, "free")
+
+    if mode == "free":
+        return "🤝 Базовые HR вопросы"
+
+    if mode == "pro":
+        return """
+🤝 PRO ИНТЕРВЬЮ
+
+💬 Вопросы:
+- почему ушли?
+- достижения?
+- результат?
+
+🧠 Ответ:
+- коротко
+- конкретно
+- с цифрами
+"""
+
+    return "🤝 VIP симуляция интервью"
 
 # =========================
-# PDF ENGINE (STABLE PRO)
+# PDF ENGINE (STABLE)
 # =========================
 def generate_pdf(data, mode):
 
@@ -101,43 +152,44 @@ def generate_pdf(data, mode):
     y = 800
 
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(100, y, f"RESUME - {mode.upper()} MODE")
+    c.drawString(100, y, f"RESUME - {mode.upper()}")
     y -= 40
 
-    # FIO
+    fio = data.get("fio", "—")
+    exp = data.get("experience", "—")
+    edu = data.get("education", "—")
+
     c.setFont("Helvetica-Bold", 12)
     c.drawString(100, y, "ФИО:")
     y -= 20
     c.setFont("Helvetica", 11)
-    c.drawString(120, y, data.get("fio", ""))
+    c.drawString(120, y, fio)
     y -= 40
 
-    # EXPERIENCE
     c.setFont("Helvetica-Bold", 12)
     c.drawString(100, y, "ОПЫТ:")
     y -= 20
 
     c.setFont("Helvetica", 10)
-    for line in str(data.get("experience", "")).split("\n"):
+    for line in str(exp).split("\n"):
         if line.strip():
             c.drawString(120, y, f"• {line}")
             y -= 18
 
     y -= 20
 
-    # EDUCATION
     c.setFont("Helvetica-Bold", 12)
     c.drawString(100, y, "ОБРАЗОВАНИЕ:")
     y -= 20
 
     c.setFont("Helvetica", 10)
-    for line in str(data.get("education", "")).split("\n"):
+    for line in str(edu).split("\n"):
         if line.strip():
             c.drawString(120, y, f"• {line}")
             y -= 18
 
     c.setFont("Helvetica-Oblique", 10)
-    c.drawString(100, 50, "AI Career Engine V4.2")
+    c.drawString(100, 50, "AI CAREER ENGINE V4.3")
 
     c.save()
     return file_path
@@ -154,7 +206,6 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = query.data
     mode = USER_MODE.get(user_id, "free")
 
-    # SAFE INIT FLOW
     if action == "resume":
         USER_FLOW[user_id] = {"step": 1, "data": {}}
         await query.message.reply_text("📌 Введите ФИО и должность:")
@@ -172,10 +223,8 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(interview_engine(mode))
         return
 
-    await query.message.reply_text("❌ Ошибка")
-
 # =========================
-# RESUME FLOW (ROBUST + SAFE)
+# RESUME FLOW (SAFE)
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -186,27 +235,23 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     flow = USER_FLOW[user_id]
-    mode = USER_MODE.get(user_id, "free")
 
-    # STEP 1
     if flow["step"] == 1:
         flow["data"]["fio"] = text
         flow["step"] = 2
         await update.message.reply_text("📌 Опыт работы:")
         return
 
-    # STEP 2
     if flow["step"] == 2:
         flow["data"]["experience"] = text
         flow["step"] = 3
         await update.message.reply_text("📌 Образование и навыки:")
         return
 
-    # STEP 3 → FINAL PDF
     if flow["step"] == 3:
         flow["data"]["education"] = text
 
-        pdf_file = generate_pdf(flow["data"], mode)
+        pdf_file = generate_pdf(flow["data"], USER_MODE.get(user_id, "free"))
 
         USER_FLOW[user_id] = {}
 
@@ -214,7 +259,7 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_document(
                 document=f,
                 filename="resume.pdf",
-                caption=f"📄 Резюме готово ({mode.upper()})"
+                caption=f"📄 Готово ({USER_MODE.get(user_id,'free').upper()})"
             )
 
 # =========================
