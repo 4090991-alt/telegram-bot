@@ -2,9 +2,6 @@ import os
 import logging
 import tempfile
 
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -37,7 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V5.0\n\nВыберите режим:",
+        "💼 CAREER ENGINE v7 (CONNECTOR SYSTEM)\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -46,189 +43,140 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
 
-    user_id = query.from_user.id
-    mode = query.data
+    user_id = q.from_user.id
+    mode = q.data
 
     USER_MODE[user_id] = mode
 
     keyboard = [
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
-        [InlineKeyboardButton("🏢 Анализ", callback_data="company")],
+        [InlineKeyboardButton("🏢 Компания", callback_data="company")],
         [InlineKeyboardButton("🔎 Вакансии", callback_data="jobs")],
-        [InlineKeyboardButton("🤝 Интервью", callback_data="interview")],
-        [InlineKeyboardButton("🧠 Стратегия", callback_data="vip")]
+        [InlineKeyboardButton("🤝 HR", callback_data="interview")],
+        [InlineKeyboardButton("🌐 Сайт-визитка", callback_data="site")]
     ]
 
-    await query.message.reply_text(
-        f"✅ Режим: {mode.upper()}\n\nВыберите действие:",
+    await q.message.reply_text(
+        f"✅ MODE: {mode.upper()}\n\nВыберите действие:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # =========================
-# PRO / FREE / VIP ENGINE
+# CORE ENGINE
 # =========================
-def company_engine(mode):
+def engine(mode, action):
 
+    # FREE
     if mode == "free":
-        return "🏢 Базовый анализ компании"
+        return {
+            "resume": "📄 FREE резюме (HH формат)",
+            "company": "🏢 Базовый анализ компании",
+            "jobs": "🔎 Базовые вакансии",
+            "interview": "🤝 Базовые HR вопросы",
+            "site": "🌐 Простая визитка"
+        }[action]
 
+    # PRO (усиленная логика)
     if mode == "pro":
-        return """
-🏢 PRO АНАЛИЗ
+        return {
+            "resume": "📄 PRO резюме: опыт + достижения + усиление",
+            "company": "🏢 PRO анализ: зарплаты + риски + структура",
+            "jobs": "🔎 PRO: сравнение вакансий + стратегия",
+            "interview": "🤝 PRO: разбор ответов + улучшение",
+            "site": "🌐 PRO сайт-визитка: структура + блоки + CTA"
+        }[action]
 
-💰 Зарплаты:
-- ниже / рынок / выше рынка
-
-⚠️ Риски:
-- нагрузка
-- стабильность отдела
-
-📊 Стабильность:
-- средняя
-
-🧠 Стратегия:
-- вход через базовую позицию
-- рост через 6–12 месяцев
-"""
-
-    return "🧠 VIP: стратегия карьеры + выбор компании"
-
-def jobs_engine(mode):
-
-    if mode == "free":
-        return "🔎 Базовые вакансии"
-
-    if mode == "pro":
-        return """
-🔎 PRO ВАКАНСИИ
-
-📊 Анализ:
-- сравнение 10+ вакансий
-- медиана рынка
-
-⚠️ Риски:
-- размытые обязанности
-
-🎯 Стратегия:
-- стабильные компании
-- долгосрочный рост
-"""
-
-    return "🧠 VIP: карьерная стратегия + рынок + выбор профессии"
-
-def interview_engine(mode):
-
-    if mode == "free":
-        return "🤝 Базовые HR вопросы"
-
-    if mode == "pro":
-        return """
-🤝 PRO ИНТЕРВЬЮ
-
-💬 Вопросы:
-- почему ушли?
-- достижения?
-- результат?
-
-🧠 Ответ:
-- коротко
-- конкретно
-- с цифрами
-"""
-
-    return "🧠 VIP: полная симуляция интервью"
+    # VIP (стратегия)
+    return {
+        "resume": "📄 VIP: позиционирование кандидата",
+        "company": "🏢 VIP: стратегия входа в компанию",
+        "jobs": "🔎 VIP: карьерная стратегия",
+        "interview": "🤝 VIP: симуляция интервью",
+        "site": "🌐 VIP сайт: продающий лендинг + оффер"
+    }[action]
 
 # =========================
-# PDF
+# 🔥 CONNECTOR ENGINE (ГЛАВНОЕ ИЗ КАРТЫ)
 # =========================
-def generate_pdf(data, mode):
-
-    file_path = tempfile.mktemp(suffix=".pdf")
-    c = canvas.Canvas(file_path, pagesize=A4)
-
-    y = 800
-
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(100, y, f"RESUME - {mode.upper()}")
-    y -= 40
-
-    fio = data.get("fio", "—")
-    exp = data.get("experience", "—")
-    edu = data.get("education", "—")
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(100, y, "ФИО:")
-    y -= 20
-    c.setFont("Helvetica", 11)
-    c.drawString(120, y, fio)
-    y -= 40
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(100, y, "ОПЫТ:")
-    y -= 20
-
-    c.setFont("Helvetica", 10)
-    for line in str(exp).split("\n"):
-        if line.strip():
-            c.drawString(120, y, f"• {line}")
-            y -= 18
-
-    y -= 20
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(100, y, "ОБРАЗОВАНИЕ:")
-    y -= 20
-
-    c.setFont("Helvetica", 10)
-    for line in str(edu).split("\n"):
-        if line.strip():
-            c.drawString(120, y, f"• {line}")
-            y -= 18
-
-    c.setFont("Helvetica-Oblique", 10)
-    c.drawString(100, 50, "AI CAREER ENGINE V5.0")
-
-    c.save()
-    return file_path
-
-# =========================
-# ACTION HANDLER
-# =========================
-async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    user_id = query.from_user.id
-    action = query.data
-    mode = USER_MODE.get(user_id, "free")
+def connector(action):
 
     if action == "resume":
-        USER_FLOW[user_id] = {"step": 1, "data": {}}
-        await query.message.reply_text("📌 Введите ФИО:")
-        return
+        return [
+            "➡️ Рекомендуем: PRO анализ компании",
+            "➡️ Или: вакансии под резюме",
+            "➡️ Или: HR симулятор"
+        ]
 
     if action == "company":
-        await query.message.reply_text(company_engine(mode))
-        return
+        return [
+            "➡️ Рекомендуем: улучшить резюме под компанию",
+            "➡️ Или: вакансии этой сферы",
+            "➡️ Или: VIP стратегия"
+        ]
 
     if action == "jobs":
-        await query.message.reply_text(jobs_engine(mode))
-        return
+        return [
+            "➡️ Рекомендуем: усилить резюме (PRO)",
+            "➡️ Или: HR подготовка",
+            "➡️ Или: VIP стратегия входа"
+        ]
 
     if action == "interview":
-        await query.message.reply_text(interview_engine(mode))
-        return
+        return [
+            "➡️ Рекомендуем: усилить резюме",
+            "➡️ Или: вакансии",
+            "➡️ Или: VIP стратегия"
+        ]
 
-    if action == "vip":
-        await query.message.reply_text(jobs_engine("vip"))
-        return
+    if action == "site":
+        return [
+            "➡️ Рекомендуем: создать резюме",
+            "➡️ Или: PRO анализ",
+            "➡️ Или: вакансии + HR"
+        ]
+
+    return []
 
 # =========================
-# FLOW
+# PAYMENT PLACEHOLDER (НЕ АКТИВЕН)
+# =========================
+def payment_placeholder():
+    return "💳 PAYMENT LAYER: DISABLED (READY FOR FUTURE INTEGRATION)"
+
+# =========================
+# HANDLER
+# =========================
+async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    q = update.callback_query
+    await q.answer()
+
+    user_id = q.from_user.id
+    action = q.data
+    mode = USER_MODE.get(user_id, "free")
+
+    if action in ["resume", "company", "jobs", "interview", "site"]:
+
+        if action == "resume":
+            USER_FLOW[user_id] = {"step": 1, "data": {}}
+            await q.message.reply_text("📌 Введите ФИО:")
+            return
+
+        result = engine(mode, action)
+        await q.message.reply_text(result)
+
+        # 🔥 ВАЖНО: СВЯЗИ ИЗ КАРТЫ
+        suggestions = connector(action)
+
+        await q.message.reply_text(
+            "🔗 СЛЕДУЮЩИЕ ШАГИ:\n\n" + "\n".join(suggestions)
+        )
+
+# =========================
+# RESUME FLOW
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -239,7 +187,6 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     flow = USER_FLOW[user_id]
-    mode = USER_MODE.get(user_id, "free")
 
     if flow["step"] == 1:
         flow["data"]["fio"] = text
@@ -248,36 +195,32 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if flow["step"] == 2:
-        flow["data"]["experience"] = text
+        flow["data"]["exp"] = text
         flow["step"] = 3
         await update.message.reply_text("📌 Образование:")
         return
 
     if flow["step"] == 3:
-        flow["data"]["education"] = text
-
-        pdf_file = generate_pdf(flow["data"], mode)
+        flow["data"]["edu"] = text
 
         USER_FLOW[user_id] = {}
 
-        with open(pdf_file, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                filename="resume.pdf",
-                caption=f"📄 ГОТОВО ({mode.upper()})"
-            )
+        await update.message.reply_text(
+            "📄 РЕЗУЛЬТАТ ГОТОВ\n\n"
+            "✔ система завершила обработку\n"
+            "🔗 теперь выбери следующий шаг"
+        )
 
 # =========================
 # RUN
 # =========================
 def main():
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-
     app.add_handler(CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$"))
-    app.add_handler(CallbackQueryHandler(action_handler, pattern="^(resume|company|jobs|interview|vip)$"))
-
+    app.add_handler(CallbackQueryHandler(handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
     app.run_polling()
