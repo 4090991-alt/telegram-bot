@@ -23,7 +23,7 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 # STATE
 # =========================
 USER_MODE = {}
-USER_RESUME = {}
+USER_FLOW = {}
 
 # =========================
 # START
@@ -37,7 +37,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V3.1\n\nВыберите режим:",
+        "💼 CAREER ENGINE V4\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -63,85 +63,133 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🤝 Собеседование", callback_data="interview")]
     ]
 
-    await query.message.reply_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 # =========================
-# ENGINE CORE
+# ENGINE
 # =========================
 def company_engine(mode):
     return {
-        "free": "🏢 Базовый анализ компании",
-        "pro": "🏢 Расширенный анализ (зарплаты, риски, отзывы)",
-        "vip": "🏢 Глубокий анализ + стратегия входа"
+        "free": "🏢 Базовый анализ",
+        "pro": "🏢 Зарплаты + риски + отзывы",
+        "vip": "🏢 Стратегия входа + deep analysis"
     }.get(mode, "free")
 
 def jobs_engine(mode):
     return {
-        "free": "🔎 Базовые вакансии (ссылки)",
-        "pro": "🔎 Расширенный подбор + сравнение вакансий",
-        "vip": "🔎 Вакансии + стратегия выбора"
+        "free": "🔎 Базовые вакансии",
+        "pro": "🔎 Сравнение вакансий + подбор",
+        "vip": "🔎 Стратегия трудоустройства"
     }.get(mode, "free")
 
 def interview_engine(mode):
     return {
         "free": "🤝 Базовые HR вопросы",
-        "pro": "🤝 HR + разбор ответов",
+        "pro": "🤝 Разбор ответов HR",
         "vip": "🤝 Полная симуляция интервью"
     }.get(mode, "free")
 
 # =========================
-# PDF GENERATOR (UPGRADED)
+# RESUME FLOW ENGINE (UNIFIED)
 # =========================
-def generate_pdf(data):
+async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    user_id = update.message.from_user.id
+    text = update.message.text
+
+    if user_id not in USER_FLOW:
+        return
+
+    flow = USER_FLOW[user_id]
+    mode = USER_MODE.get(user_id, "free")
+
+    # =========================
+    # STEP 1
+    # =========================
+    if flow["step"] == 1:
+        flow["data"]["fio"] = text
+        flow["step"] = 2
+
+        if mode == "pro":
+            await update.message.reply_text("📌 PRO: Опыт по годам:")
+        else:
+            await update.message.reply_text("📌 Опыт работы:")
+        return
+
+    # =========================
+    # STEP 2
+    # =========================
+    if flow["step"] == 2:
+        flow["data"]["experience"] = text
+        flow["step"] = 3
+        await update.message.reply_text("📌 Образование и навыки:")
+        return
+
+    # =========================
+    # STEP 3 → OUTPUT
+    # =========================
+    if flow["step"] == 3:
+        flow["data"]["education"] = text
+
+        pdf_file = generate_pdf(flow["data"], mode)
+
+        USER_FLOW[user_id] = {}
+
+        with open(pdf_file, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename="resume.pdf",
+                caption=f"📄 Резюме готово ({mode.upper()})"
+            )
+
+# =========================
+# PDF ENGINE (CLEAN)
+# =========================
+def generate_pdf(data, mode):
 
     file_path = tempfile.mktemp(suffix=".pdf")
-
     c = canvas.Canvas(file_path, pagesize=A4)
 
     y = 800
 
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(100, y, "ПРОФЕССИОНАЛЬНОЕ РЕЗЮМЕ")
+    c.drawString(100, y, f"RESUME - {mode.upper()} MODE")
     y -= 40
 
-    c.setFont("Helvetica", 12)
-
-    # ФИО
-    c.drawString(100, y, "ФИО / ДОЛЖНОСТЬ:")
-    y -= 20
-    c.drawString(120, y, data.get("ФИО", ""))
-    y -= 40
-
-    # ОПЫТ
+    # FIO
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(100, y, "ОПЫТ РАБОТЫ:")
+    c.drawString(100, y, "ФИО:")
+    y -= 20
+    c.setFont("Helvetica", 11)
+    c.drawString(120, y, data.get("fio", ""))
+    y -= 40
+
+    # EXPERIENCE
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(100, y, "ОПЫТ:")
     y -= 20
 
-    c.setFont("Helvetica", 11)
-    for line in data.get("Опыт", "").split("\n"):
+    c.setFont("Helvetica", 10)
+    for line in str(data.get("experience", "")).split("\n"):
         c.drawString(120, y, f"• {line}")
         y -= 18
 
     y -= 20
 
-    # ОБРАЗОВАНИЕ
+    # EDUCATION
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(100, y, "ОБРАЗОВАНИЕ И НАВЫКИ:")
+    c.drawString(100, y, "ОБРАЗОВАНИЕ / НАВЫКИ:")
     y -= 20
 
-    c.setFont("Helvetica", 11)
-    for line in data.get("Образование", "").split("\n"):
+    c.setFont("Helvetica", 10)
+    for line in str(data.get("education", "")).split("\n"):
         c.drawString(120, y, f"• {line}")
         y -= 18
 
     c.setFont("Helvetica-Oblique", 10)
-    c.drawString(100, 50, "AI Career Engine V3.1")
+    c.drawString(100, 50, "AI CAREER ENGINE V4")
 
     c.save()
-
     return file_path
 
 # =========================
@@ -157,10 +205,7 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = USER_MODE.get(user_id, "free")
 
     if action == "resume":
-        USER_RESUME[user_id] = {
-            "step": 1,
-            "data": {}
-        }
+        USER_FLOW[user_id] = {"step": 1, "data": {}}
         await query.message.reply_text("📌 Введите ФИО и должность:")
         return
 
@@ -176,49 +221,7 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(interview_engine(mode))
         return
 
-    await query.message.reply_text("❌ Ошибка действия")
-
-# =========================
-# RESUME FLOW (STABLE)
-# =========================
-async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user_id = update.message.from_user.id
-    text = update.message.text
-
-    if user_id not in USER_RESUME:
-        return
-
-    state = USER_RESUME[user_id]
-
-    # STEP 1
-    if state["step"] == 1:
-        state["data"]["ФИО"] = text
-        state["step"] = 2
-        await update.message.reply_text("📌 Опыт работы (по годам):")
-        return
-
-    # STEP 2
-    if state["step"] == 2:
-        state["data"]["Опыт"] = text
-        state["step"] = 3
-        await update.message.reply_text("📌 Образование и навыки:")
-        return
-
-    # STEP 3 → PDF FINAL
-    if state["step"] == 3:
-        state["data"]["Образование"] = text
-
-        pdf_file = generate_pdf(state["data"])
-
-        USER_RESUME[user_id] = {}
-
-        with open(pdf_file, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                filename="resume.pdf",
-                caption="📄 Ваше профессиональное резюме готово"
-            )
+    await query.message.reply_text("❌ Ошибка")
 
 # =========================
 # APP
