@@ -76,24 +76,24 @@ def company_engine(mode):
         "free": "🏢 Базовый анализ компании",
         "pro": "🏢 Расширенный анализ (зарплаты, риски, отзывы)",
         "vip": "🏢 Глубокий анализ + стратегия входа"
-    }[mode]
+    }.get(mode, "free")
 
 def jobs_engine(mode):
     return {
         "free": "🔎 Базовые вакансии (ссылки)",
         "pro": "🔎 Расширенный подбор + сравнение вакансий",
         "vip": "🔎 Вакансии + стратегия выбора"
-    }[mode]
+    }.get(mode, "free")
 
 def interview_engine(mode):
     return {
         "free": "🤝 Базовые HR вопросы",
         "pro": "🤝 HR + разбор ответов",
         "vip": "🤝 Полная симуляция интервью"
-    }[mode]
+    }.get(mode, "free")
 
 # =========================
-# PDF GENERATOR
+# PDF GENERATOR (STABLE)
 # =========================
 def generate_pdf(data):
 
@@ -103,12 +103,15 @@ def generate_pdf(data):
 
     y = 800
 
+    c.setFont("Helvetica-Bold", 14)
     c.drawString(100, y, "RESUME - CAREER ENGINE")
     y -= 40
 
+    c.setFont("Helvetica", 11)
+
     for key, value in data.items():
-        c.drawString(100, y, f"{key.upper()}: {value}")
-        y -= 30
+        c.drawString(100, y, f"{key}: {value}")
+        y -= 25
 
     c.save()
 
@@ -127,25 +130,26 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = USER_MODE.get(user_id, "free")
 
     if action == "resume":
-
         USER_RESUME[user_id] = {"step": 1, "data": {}}
         await query.message.reply_text("📌 Введите ФИО и должность:")
         return
 
-    elif action == "company":
+    if action == "company":
         await query.message.reply_text(company_engine(mode))
         return
 
-    elif action == "jobs":
+    if action == "jobs":
         await query.message.reply_text(jobs_engine(mode))
         return
 
-    elif action == "interview":
+    if action == "interview":
         await query.message.reply_text(interview_engine(mode))
         return
 
+    await query.message.reply_text("❌ Неизвестное действие")
+
 # =========================
-# RESUME FLOW + PDF FINAL
+# RESUME FLOW + PDF
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -157,33 +161,31 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state = USER_RESUME[user_id]
 
-    # STEP 1
     if state["step"] == 1:
-        state["data"]["main"] = text
+        state["data"]["ФИО"] = text
         state["step"] = 2
         await update.message.reply_text("📌 Опыт работы (по годам):")
         return
 
-    # STEP 2
     if state["step"] == 2:
-        state["data"]["experience"] = text
+        state["data"]["Опыт"] = text
         state["step"] = 3
         await update.message.reply_text("📌 Образование и навыки:")
         return
 
-    # STEP 3 → PDF
     if state["step"] == 3:
-        state["data"]["education"] = text
+        state["data"]["Образование"] = text
 
         pdf_file = generate_pdf(state["data"])
 
         USER_RESUME[user_id] = {}
 
-        await update.message.reply_document(
-            document=open(pdf_file, "rb"),
-            filename="resume.pdf",
-            caption="📄 Ваше резюме готово (PDF)"
-        )
+        with open(pdf_file, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename="resume.pdf",
+                caption="📄 Ваше резюме готово (PDF)"
+            )
 
 # =========================
 # APP
