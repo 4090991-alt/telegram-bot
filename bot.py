@@ -5,6 +5,8 @@ import tempfile
 
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -22,7 +24,12 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # =========================
-# DB SAFE LAYER
+# UTF FIX (ВАЖНО)
+# =========================
+pdfmetrics.registerFont(UnicodeCIDFont("HeiseiMin-W3"))
+
+# =========================
+# DB
 # =========================
 def db_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -68,7 +75,7 @@ def update_score(user_id, score):
         logging.error(e)
 
 # =========================
-# AI SCORING (FIXED)
+# AI SCORING
 # =========================
 def scoring_engine(text):
     score = 50
@@ -83,7 +90,7 @@ def scoring_engine(text):
     return min(score, 100)
 
 # =========================
-# PDF ENGINE (STABLE + FIXED UTF)
+# PDF (FIXED UTF + STABLE)
 # =========================
 def generate_pdf(data):
 
@@ -92,19 +99,20 @@ def generate_pdf(data):
 
     y = 800
 
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont("HeiseiMin-W3", 18)
     c.drawString(100, y, "AI RESUME - CAREER ENGINE V7")
-    y -= 40
+    y -= 50
 
-    c.setFont("Helvetica", 12)
+    c.setFont("HeiseiMin-W3", 12)
 
     fields = {
-        "FIO": data.get("fio", ""),
-        "EXPERIENCE": data.get("exp", ""),
-        "EDUCATION": data.get("edu", "")
+        "ФИО": data.get("fio", ""),
+        "ОПЫТ": data.get("exp", ""),
+        "ОБРАЗОВАНИЕ": data.get("edu", "")
     }
 
     for k, v in fields.items():
+
         c.drawString(100, y, f"{k}:")
         y -= 20
 
@@ -140,7 +148,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# MODE HANDLER
+# MODE
 # =========================
 async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -163,40 +171,25 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# ROUTER (SAFE)
+# ROUTER
 # =========================
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if not update.callback_query:
-        return
 
     q = update.callback_query
     await q.answer()
 
-    action = q.data
     user_id = q.from_user.id
+    action = q.data
 
     if action == "resume":
         USER_FLOW[user_id] = {"step": 1, "data": {}}
         await q.message.reply_text("📌 Введите ФИО:")
         return
 
-    if action == "company":
-        await q.message.reply_text("🏢 AI анализ компании (V7)")
-        return
-
-    if action == "jobs":
-        await q.message.reply_text("🔎 AI вакансии (V7)")
-        return
-
-    if action == "interview":
-        await q.message.reply_text("🤝 AI интервью (V7)")
-        return
-
     await q.message.reply_text("⚙️ функция подключается...")
 
 # =========================
-# FLOW (FIXED + PDF)
+# FLOW (FIXED)
 # =========================
 async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
