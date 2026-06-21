@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 # =========================
-# STATE
+# STATE LAYER (SAFE)
 # =========================
 USER_MODE = {}
 USER_FLOW = {}
@@ -60,7 +60,7 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# ENGINE (PROFESSIONAL FIXED)
+# ENGINE (SAFE SAAS CORE)
 # =========================
 def engine(mode, action):
 
@@ -88,55 +88,56 @@ def engine(mode, action):
     return data.get(mode, data["free"]).get(action, "❌ нет данных")
 
 # =========================
-# CONNECTOR (КАРТА СВЯЗЕЙ)
+# CONNECTOR MAP (СВЯЗИ СХЕМЫ)
 # =========================
 def connector(action):
 
-    map_links = {
+    return {
         "resume": [
             "➡️ PRO анализ компании",
             "➡️ вакансии под профиль",
             "➡️ HR симуляция"
         ],
         "company": [
-            "➡️ улучшить резюме под рынок",
-            "➡️ вакансии этой отрасли",
-            "➡️ VIP стратегия входа"
+            "➡️ улучшить резюме",
+            "➡️ вакансии рынка",
+            "➡️ VIP стратегия"
         ],
         "jobs": [
             "➡️ усилить резюме",
             "➡️ HR подготовка",
-            "➡️ VIP стратегия"
+            "➡️ VIP стратегия входа"
         ],
         "interview": [
-            "➡️ усилить резюме",
+            "➡️ улучшить резюме",
             "➡️ вакансии",
             "➡️ VIP стратегия"
         ]
-    }
-
-    return map_links.get(action, [])
+    }.get(action, [])
 
 # =========================
-# ACTION ROUTER (SAFE)
+# ACTION ROUTER (FIXED SAFE)
 # =========================
 async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    if not update.callback_query:
+    q = update.callback_query
+
+    if not q:
         return
 
-    q = update.callback_query
     await q.answer()
 
     user_id = q.from_user.id
     action = q.data
     mode = USER_MODE.get(user_id, "free")
 
+    # INIT FLOW
     if action == "resume":
         USER_FLOW[user_id] = {"step": 1, "data": {}}
         await q.message.reply_text("📌 Введите ФИО:")
         return
 
+    # SAFETY: always respond
     result = engine(mode, action)
     await q.message.reply_text(result)
 
@@ -148,7 +149,7 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # =========================
-# RESUME FLOW (SAFE)
+# RESUME FLOW (NO DEAD ZONES)
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -160,19 +161,21 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     flow = USER_FLOW[user_id]
 
-    if flow["step"] == 1:
+    step = flow.get("step", 1)
+
+    if step == 1:
         flow["data"]["fio"] = text
         flow["step"] = 2
         await update.message.reply_text("📌 Опыт работы:")
         return
 
-    if flow["step"] == 2:
+    if step == 2:
         flow["data"]["exp"] = text
         flow["step"] = 3
         await update.message.reply_text("📌 Образование:")
         return
 
-    if flow["step"] == 3:
+    if step == 3:
         flow["data"]["edu"] = text
 
         USER_FLOW[user_id] = {}
@@ -180,7 +183,7 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "📄 ГОТОВО\n\n"
             "✔ данные собраны\n"
-            "➡️ выбери следующий шаг в системе"
+            "➡️ выбери следующий шаг: PRO / JOBS / INTERVIEW"
         )
 
 # =========================
