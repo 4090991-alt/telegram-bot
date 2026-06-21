@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 # =========================
-# STATE (CLEAN)
+# STATE
 # =========================
 USER_MODE = {}
 USER_FLOW = {}
@@ -31,13 +31,13 @@ USER_FLOW = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [InlineKeyboardButton("🟢 FREE режим", callback_data="free")],
-        [InlineKeyboardButton("🟡 PRO режим", callback_data="pro")],
-        [InlineKeyboardButton("🔴 VIP режим", callback_data="vip")]
+        [InlineKeyboardButton("🟢 FREE", callback_data="free")],
+        [InlineKeyboardButton("🟡 PRO", callback_data="pro")],
+        [InlineKeyboardButton("🔴 VIP", callback_data="vip")]
     ]
 
     await update.message.reply_text(
-        "💼 CAREER ENGINE V4.3\n\nВыберите режим:",
+        "💼 CAREER ENGINE V5.0\n\nВыберите режим:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -56,9 +56,10 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📄 Резюме", callback_data="resume")],
-        [InlineKeyboardButton("🏢 Анализ компании", callback_data="company")],
+        [InlineKeyboardButton("🏢 Анализ", callback_data="company")],
         [InlineKeyboardButton("🔎 Вакансии", callback_data="jobs")],
-        [InlineKeyboardButton("🤝 Собеседование", callback_data="interview")]
+        [InlineKeyboardButton("🤝 Интервью", callback_data="interview")],
+        [InlineKeyboardButton("🧠 Стратегия", callback_data="vip")]
     ]
 
     await query.message.reply_text(
@@ -67,7 +68,7 @@ async def mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# ENGINE CORE (PRO UPGRADED)
+# PRO / FREE / VIP ENGINE
 # =========================
 def company_engine(mode):
 
@@ -76,10 +77,10 @@ def company_engine(mode):
 
     if mode == "pro":
         return """
-🏢 PRO ГЛУБОКИЙ АНАЛИЗ
+🏢 PRO АНАЛИЗ
 
 💰 Зарплаты:
-- ниже рынка / рынок / выше рынка
+- ниже / рынок / выше рынка
 
 ⚠️ Риски:
 - нагрузка
@@ -90,10 +91,10 @@ def company_engine(mode):
 
 🧠 Стратегия:
 - вход через базовую позицию
-- усиление резюме под роль
+- рост через 6–12 месяцев
 """
 
-    return "🏢 VIP стратегический анализ"
+    return "🧠 VIP: стратегия карьеры + выбор компании"
 
 def jobs_engine(mode):
 
@@ -104,20 +105,19 @@ def jobs_engine(mode):
         return """
 🔎 PRO ВАКАНСИИ
 
-📊 Анализ рынка:
-- сравни 10+ вакансий
-
-💰 Зарплаты:
-- ориентируйся на медиану рынка
+📊 Анализ:
+- сравнение 10+ вакансий
+- медиана рынка
 
 ⚠️ Риски:
-- размытые обязанности = риск
+- размытые обязанности
 
 🎯 Стратегия:
-- выбирать стабильные компании
+- стабильные компании
+- долгосрочный рост
 """
 
-    return "🔎 VIP стратегия карьеры"
+    return "🧠 VIP: карьерная стратегия + рынок + выбор профессии"
 
 def interview_engine(mode):
 
@@ -139,10 +139,10 @@ def interview_engine(mode):
 - с цифрами
 """
 
-    return "🤝 VIP симуляция интервью"
+    return "🧠 VIP: полная симуляция интервью"
 
 # =========================
-# PDF ENGINE (STABLE)
+# PDF
 # =========================
 def generate_pdf(data, mode):
 
@@ -189,7 +189,7 @@ def generate_pdf(data, mode):
             y -= 18
 
     c.setFont("Helvetica-Oblique", 10)
-    c.drawString(100, 50, "AI CAREER ENGINE V4.3")
+    c.drawString(100, 50, "AI CAREER ENGINE V5.0")
 
     c.save()
     return file_path
@@ -208,7 +208,7 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "resume":
         USER_FLOW[user_id] = {"step": 1, "data": {}}
-        await query.message.reply_text("📌 Введите ФИО и должность:")
+        await query.message.reply_text("📌 Введите ФИО:")
         return
 
     if action == "company":
@@ -223,8 +223,12 @@ async def action_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(interview_engine(mode))
         return
 
+    if action == "vip":
+        await query.message.reply_text(jobs_engine("vip"))
+        return
+
 # =========================
-# RESUME FLOW (SAFE)
+# FLOW
 # =========================
 async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -235,6 +239,7 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     flow = USER_FLOW[user_id]
+    mode = USER_MODE.get(user_id, "free")
 
     if flow["step"] == 1:
         flow["data"]["fio"] = text
@@ -245,13 +250,13 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if flow["step"] == 2:
         flow["data"]["experience"] = text
         flow["step"] = 3
-        await update.message.reply_text("📌 Образование и навыки:")
+        await update.message.reply_text("📌 Образование:")
         return
 
     if flow["step"] == 3:
         flow["data"]["education"] = text
 
-        pdf_file = generate_pdf(flow["data"], USER_MODE.get(user_id, "free"))
+        pdf_file = generate_pdf(flow["data"], mode)
 
         USER_FLOW[user_id] = {}
 
@@ -259,11 +264,11 @@ async def resume_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_document(
                 document=f,
                 filename="resume.pdf",
-                caption=f"📄 Готово ({USER_MODE.get(user_id,'free').upper()})"
+                caption=f"📄 ГОТОВО ({mode.upper()})"
             )
 
 # =========================
-# APP
+# RUN
 # =========================
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -271,7 +276,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
 
     app.add_handler(CallbackQueryHandler(mode_handler, pattern="^(free|pro|vip)$"))
-    app.add_handler(CallbackQueryHandler(action_handler, pattern="^(resume|company|jobs|interview)$"))
+    app.add_handler(CallbackQueryHandler(action_handler, pattern="^(resume|company|jobs|interview|vip)$"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
