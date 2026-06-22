@@ -74,12 +74,15 @@ async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     steps = get_connector(mode)
 
-    await query.message.reply_text(
-        "🔗 NEXT STEPS:\n\n" + "\n".join("➡️ " + s for s in steps)
-    )
+    if steps:
+        await query.message.reply_text(
+            "🔗 NEXT STEPS:\n\n" + "\n".join("➡️ " + s for s in steps)
+        )
+    else:
+        await query.message.reply_text("⚠️ Нет данных")
 
 # =========================
-# MAIN
+# MAIN (ВАЖНО ДЛЯ RENDER)
 # =========================
 def main():
 
@@ -90,7 +93,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
 
-    app.run_polling()
+    # 🔥 ВАЖНО: Render стабильнее с этим вариантом
+    app.run_polling(drop_pending_updates=True)
 
 # =========================
 # RUN
