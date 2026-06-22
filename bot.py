@@ -22,7 +22,7 @@ print("BOT STARTED OK")
 USER = {}
 
 # =========================
-# RESUME + PROFILE STORAGE
+# STORAGE
 # =========================
 USER_STATE = {}
 USER_DATA = {}
@@ -39,7 +39,7 @@ def get_connector(mode):
     }.get(mode, [])
 
 # =========================
-# INTENT DETECTOR (ЭТАП 1)
+# INTENT DETECTOR
 # =========================
 def detect_intent(text: str):
     text = text.lower()
@@ -54,6 +54,35 @@ def detect_intent(text: str):
         return "interview_prep"
 
     return "unknown"
+
+# =========================
+# 🧠 DECISION ENGINE (ЭТАП 2)
+# =========================
+def decision_engine(profile):
+    age = profile.get("age")
+    goal = profile.get("goal", "")
+    exp = profile.get("experience", "")
+
+    try:
+        age = int(age)
+    except:
+        age = None
+
+    # 🎯 логика маршрутизации
+
+    if age and age < 18:
+        return "education_path"
+
+    if "смена" in goal:
+        return "career_change_path"
+
+    if "деньги" in goal:
+        return "growth_path"
+
+    if exp and ("10" in exp or "20" in exp):
+        return "senior_path"
+
+    return "resume_path"
 
 # =========================
 # START
@@ -72,7 +101,7 @@ async def start(update: Update, context):
     )
 
 # =========================
-# CALLBACK HANDLER
+# CALLBACK
 # =========================
 async def handler(update: Update, context):
     q = update.callback_query
@@ -93,26 +122,25 @@ async def handler(update: Update, context):
         await q.message.reply_text("📄 Введите ваше ФИО:")
 
 # =========================
-# RESUME + PROFILE FLOW
+# PROFILE + RESUME FLOW
 # =========================
 async def resume_flow(update: Update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
     # =========================
-    # ЭТАП 1: INTENT DETECTION
+    # INTENT
     # =========================
     intent = detect_intent(text)
 
     # =========================
-    # START PROFILE (NEW)
+    # START PROFILE
     # =========================
     if intent in ["job_search", "career_change"]:
         USER_PROFILE[user_id] = {
             "intent": intent,
             "step": "age"
         }
-
         await update.message.reply_text("🧠 Сколько вам лет?")
         return
 
@@ -144,17 +172,23 @@ async def resume_flow(update: Update, context):
             profile["goal"] = text
             profile["step"] = "done"
 
+            # =========================
+            # 🧠 ЭТАП 2 ВКЛЮЧЕН
+            # =========================
+            path = decision_engine(profile)
+            profile["path"] = path
+
             USER_PROFILE[user_id] = profile
 
             await update.message.reply_text(
-                "✅ Профиль собран. Анализ готовится..."
+                f"✅ Профиль готов.\n🧭 Маршрут: {path}"
             )
 
-            print("USER PROFILE:", USER_PROFILE[user_id])
+            print("PROFILE:", USER_PROFILE[user_id])
             return
 
     # =========================
-    # OLD RESUME FLOW (НЕ ЛОМАЕМ)
+    # RESUME FLOW (OLD)
     # =========================
     if user_id not in USER_STATE:
         return
@@ -204,7 +238,6 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
     print("RUNNING...")
