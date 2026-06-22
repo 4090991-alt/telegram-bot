@@ -22,13 +22,14 @@ print("BOT STARTED OK")
 USER = {}
 
 # =========================
-# RESUME MODULE STORAGE
+# RESUME + PROFILE STORAGE
 # =========================
 USER_STATE = {}
 USER_DATA = {}
+USER_PROFILE = {}
 
 # =========================
-# MENU DATA
+# MENU
 # =========================
 def get_connector(mode):
     return {
@@ -36,6 +37,23 @@ def get_connector(mode):
         "pro": ["VIP резюме", "Сайт-визитка", "Анализ рынка"],
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
     }.get(mode, [])
+
+# =========================
+# INTENT DETECTOR (ЭТАП 1)
+# =========================
+def detect_intent(text: str):
+    text = text.lower()
+
+    if "резюме" in text:
+        return "resume_build"
+    if "работ" in text:
+        return "job_search"
+    if "профес" in text:
+        return "career_change"
+    if "интервью" in text:
+        return "interview_prep"
+
+    return "unknown"
 
 # =========================
 # START
@@ -62,7 +80,6 @@ async def handler(update: Update, context):
 
     user_id = q.from_user.id
 
-    # режимы
     if q.data in ["free", "pro", "vip"]:
         USER[user_id] = q.data
         await q.message.reply_text(f"✅ {q.data.upper()} MODE ACTIVE")
@@ -70,19 +87,75 @@ async def handler(update: Update, context):
         for step in get_connector(q.data):
             await q.message.reply_text("➡️ " + step)
 
-    # запуск резюме
     elif q.data == "resume":
         USER_STATE[user_id] = "resume_name"
         USER_DATA[user_id] = {}
         await q.message.reply_text("📄 Введите ваше ФИО:")
 
 # =========================
-# RESUME FLOW (диалог)
+# RESUME + PROFILE FLOW
 # =========================
 async def resume_flow(update: Update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
+    # =========================
+    # ЭТАП 1: INTENT DETECTION
+    # =========================
+    intent = detect_intent(text)
+
+    # =========================
+    # START PROFILE (NEW)
+    # =========================
+    if intent in ["job_search", "career_change"]:
+        USER_PROFILE[user_id] = {
+            "intent": intent,
+            "step": "age"
+        }
+
+        await update.message.reply_text("🧠 Сколько вам лет?")
+        return
+
+    # =========================
+    # PROFILE FLOW
+    # =========================
+    if user_id in USER_PROFILE:
+        profile = USER_PROFILE[user_id]
+
+        if profile["step"] == "age":
+            profile["age"] = text
+            profile["step"] = "experience"
+            await update.message.reply_text("💼 Какой у вас опыт работы?")
+            return
+
+        if profile["step"] == "experience":
+            profile["experience"] = text
+            profile["step"] = "field"
+            await update.message.reply_text("🏢 В какой сфере вы работали?")
+            return
+
+        if profile["step"] == "field":
+            profile["field"] = text
+            profile["step"] = "goal"
+            await update.message.reply_text("🎯 Что вам важнее: деньги / рост / смена профессии?")
+            return
+
+        if profile["step"] == "goal":
+            profile["goal"] = text
+            profile["step"] = "done"
+
+            USER_PROFILE[user_id] = profile
+
+            await update.message.reply_text(
+                "✅ Профиль собран. Анализ готовится..."
+            )
+
+            print("USER PROFILE:", USER_PROFILE[user_id])
+            return
+
+    # =========================
+    # OLD RESUME FLOW (НЕ ЛОМАЕМ)
+    # =========================
     if user_id not in USER_STATE:
         return
 
@@ -132,7 +205,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
 
-    # важно: обработка текста для резюме
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_flow))
 
     print("RUNNING...")
