@@ -3,7 +3,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
-TOKEN = os.environ["TELEGRAM_TOKEN"]
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,8 +18,7 @@ def get_connector(mode):
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
     }.get(mode, [])
 
-# START
-def start(update: Update, context):
+def start(update, context):
     keyboard = [
         [InlineKeyboardButton("FREE", callback_data="free")],
         [InlineKeyboardButton("PRO", callback_data="pro")],
@@ -31,8 +30,7 @@ def start(update: Update, context):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# CALLBACK
-def handler(update: Update, context):
+def handler(update, context):
     q = update.callback_query
     q.answer()
 
@@ -45,12 +43,12 @@ def handler(update: Update, context):
         q.message.reply_text("➡️ " + step)
 
 def main():
-    print("RUNNING...")
-
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
+
+    print("RUNNING...")
 
     app.run_polling()
 
