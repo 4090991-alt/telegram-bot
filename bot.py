@@ -1,12 +1,11 @@
 import os
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+TOKEN = os.environ["TELEGRAM_TOKEN"]
 
-if not TOKEN:
-    print("TOKEN NOT FOUND")
-    exit()
+logging.basicConfig(level=logging.INFO)
 
 print("BOT STARTED OK")
 
@@ -19,40 +18,39 @@ def get_connector(mode):
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
     }.get(mode, [])
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
+# START
+def start(update: Update, context):
     keyboard = [
         [InlineKeyboardButton("FREE", callback_data="free")],
         [InlineKeyboardButton("PRO", callback_data="pro")],
         [InlineKeyboardButton("VIP", callback_data="vip")]
     ]
 
-    await update.message.reply_text(
-        "CAREER ENGINE ONLINE",
+    update.message.reply_text(
+        "🚀 CAREER ENGINE ONLINE",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
+# CALLBACK
+def handler(update: Update, context):
     q = update.callback_query
-    await q.answer()
+    q.answer()
 
     mode = q.data
     USER[q.from_user.id] = mode
 
-    await q.message.reply_text(f"{mode.upper()} MODE ACTIVE")
+    q.message.reply_text(f"✅ {mode.upper()} MODE ACTIVE")
 
     for step in get_connector(mode):
-        await q.message.reply_text("➡️ " + step)
+        q.message.reply_text("➡️ " + step)
 
 def main():
+    print("RUNNING...")
 
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
-
-    print("RUNNING...")
 
     app.run_polling()
 
