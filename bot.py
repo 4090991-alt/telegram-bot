@@ -5,6 +5,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
+if not TOKEN:
+    print("❌ NO TOKEN FOUND")
+    raise SystemExit()
+
 logging.basicConfig(level=logging.INFO)
 
 print("BOT STARTED OK")
@@ -50,10 +54,10 @@ def main():
 
     print("RUNNING...")
 
-    # 🔥 ВАЖНО: убираем polling-режим полностью конфликтный
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000))
+    # 💣 ВАЖНО: Render-safe режим (НЕ webhook!)
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"]
     )
 
 if __name__ == "__main__":
