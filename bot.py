@@ -3,18 +3,33 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
+# =========================
+# TOKEN
+# =========================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 if not TOKEN:
     print("❌ NO TOKEN FOUND")
-    exit()
+    raise SystemExit()
 
-logging.basicConfig(level=logging.INFO)
+# =========================
+# LOGGING
+# =========================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-print("BOT STARTED OK")
+print("🚀 BOT STARTED OK")
 
+# =========================
+# MEMORY
+# =========================
 USER = {}
 
+# =========================
+# DATA
+# =========================
 def get_connector(mode):
     return {
         "free": ["PRO улучшение", "Вакансии", "HR интервью"],
@@ -22,6 +37,9 @@ def get_connector(mode):
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
     }.get(mode, [])
 
+# =========================
+# START
+# =========================
 async def start(update: Update, context):
     keyboard = [
         [InlineKeyboardButton("FREE", callback_data="free")],
@@ -34,6 +52,9 @@ async def start(update: Update, context):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# =========================
+# CALLBACK
+# =========================
 async def handler(update: Update, context):
     q = update.callback_query
     await q.answer()
@@ -48,16 +69,27 @@ async def handler(update: Update, context):
     for step in steps:
         await q.message.reply_text("➡️ " + step)
 
+# =========================
+# MAIN (STABLE RENDER FIX)
+# =========================
 def main():
     app = Application.builder().token(TOKEN).build()
+
+    # 🔥 КЛЮЧЕВОЙ FIX: убираем старые webhook/updates конфликты
+    app.bot.delete_webhook(drop_pending_updates=True)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
 
     print("RUNNING...")
 
-    # 💣 ВАЖНО: защита от конфликтов Telegram
-    app.run_polling(drop_pending_updates=True)
+    # 🔥 Render-safe polling
+    app.run_polling(
+        drop_pending_updates=True
+    )
 
+# =========================
+# RUN
+# =========================
 if __name__ == "__main__":
     main()
