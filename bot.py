@@ -59,16 +59,13 @@ def detect_intent(text: str):
 # 🧠 DECISION ENGINE (ЭТАП 2)
 # =========================
 def decision_engine(profile):
-    age = profile.get("age")
-    goal = profile.get("goal", "")
-    exp = profile.get("experience", "")
-
     try:
-        age = int(age)
+        age = int(profile.get("age"))
     except:
         age = None
 
-    # 🎯 логика маршрутизации
+    goal = profile.get("goal", "")
+    exp = profile.get("experience", "")
 
     if age and age < 18:
         return "education_path"
@@ -83,6 +80,20 @@ def decision_engine(profile):
         return "senior_path"
 
     return "resume_path"
+
+# =========================
+# 🧭 ROUTING ENGINE (ЭТАП 3) ⭐
+# =========================
+def route_engine(path):
+    routes = {
+        "education_path": "prof_orientation_module",
+        "career_change_path": "career_change_module",
+        "growth_path": "vacancy_module",
+        "senior_path": "vip_strategy_module",
+        "resume_path": "resume_module"
+    }
+
+    return routes.get(path, "resume_module")
 
 # =========================
 # START
@@ -134,7 +145,7 @@ async def resume_flow(update: Update, context):
     intent = detect_intent(text)
 
     # =========================
-    # START PROFILE
+    # PROFILE START
     # =========================
     if intent in ["job_search", "career_change"]:
         USER_PROFILE[user_id] = {
@@ -173,15 +184,18 @@ async def resume_flow(update: Update, context):
             profile["step"] = "done"
 
             # =========================
-            # 🧠 ЭТАП 2 ВКЛЮЧЕН
+            # DECISION + ROUTING (ЭТАП 2 + 3)
             # =========================
             path = decision_engine(profile)
+            module = route_engine(path)
+
             profile["path"] = path
+            profile["module"] = module
 
             USER_PROFILE[user_id] = profile
 
             await update.message.reply_text(
-                f"✅ Профиль готов.\n🧭 Маршрут: {path}"
+                f"✅ Профиль готов\n🧠 Path: {path}\n🚀 Module: {module}"
             )
 
             print("PROFILE:", USER_PROFILE[user_id])
