@@ -1,23 +1,47 @@
 import os
 import logging
+from dotenv import load_dotenv
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-print("BOT STARTED OK")
+# =========================
+# LOAD ENV
+# =========================
+load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
+if not TOKEN:
+    print("❌ TOKEN NOT FOUND")
+    exit()
+
+# =========================
+# LOGGING
+# =========================
 logging.basicConfig(level=logging.INFO)
 
+print("🚀 BOT STARTED OK")
+
+# =========================
+# MEMORY
+# =========================
 USER = {}
 
+# =========================
+# LOGIC
+# =========================
 def get_connector(mode):
-    return {
+    data = {
         "free": ["PRO улучшение", "Вакансии", "HR интервью"],
         "pro": ["VIP резюме", "Сайт-визитка", "Анализ рынка"],
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
-    }.get(mode, [])
+    }
+    return data.get(mode, [])
 
+# =========================
+# START COMMAND
+# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
@@ -31,20 +55,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# =========================
+# HANDLER
+# =========================
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q = update.callback_query
     await q.answer()
 
     mode = q.data
-    USER[q.from_user.id] = mode
+    user_id = q.from_user.id
 
-    await q.message.reply_text(f"{mode.upper()} MODE ACTIVE")
+    USER[user_id] = mode
+
+    await q.message.reply_text(f"✅ {mode.upper()} MODE ACTIVE")
 
     steps = get_connector(mode)
 
-    await q.message.reply_text("\n".join("➡️ " + s for s in steps))
+    if steps:
+        await q.message.reply_text(
+            "🔗 NEXT STEPS:\n\n" + "\n".join("➡️ " + s for s in steps)
+        )
+    else:
+        await q.message.reply_text("⚠️ Нет данных для режима")
 
+# =========================
+# MAIN
+# =========================
 def main():
 
     app = Application.builder().token(TOKEN).build()
@@ -52,9 +89,12 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
 
-    print("RUNNING...")
+    print("🔄 RUNNING ON RENDER...")
 
     app.run_polling()
 
+# =========================
+# RUN
+# =========================
 if __name__ == "__main__":
     main()
