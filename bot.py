@@ -5,6 +5,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
+if not TOKEN:
+    print("❌ NO TOKEN FOUND")
+    exit()
+
 logging.basicConfig(level=logging.INFO)
 
 print("BOT STARTED OK")
@@ -39,7 +43,9 @@ async def handler(update: Update, context):
 
     await q.message.reply_text(f"✅ {mode.upper()} MODE ACTIVE")
 
-    for step in get_connector(mode):
+    steps = get_connector(mode)
+
+    for step in steps:
         await q.message.reply_text("➡️ " + step)
 
 def main():
@@ -50,7 +56,8 @@ def main():
 
     print("RUNNING...")
 
-    app.run_polling()
+    # 💣 ВАЖНО: защита от конфликтов Telegram
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
