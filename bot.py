@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # =========================
-# LOAD ENV
+# ENV
 # =========================
 load_dotenv()
 
@@ -14,14 +14,17 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 if not TOKEN:
     print("❌ TOKEN NOT FOUND")
-    exit()
+    raise SystemExit()
 
 # =========================
 # LOGGING
 # =========================
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-print("🚀 BOT STARTED OK")
+print("🚀 BOT FILE LOADED OK")
 
 # =========================
 # MEMORY
@@ -32,15 +35,14 @@ USER = {}
 # LOGIC
 # =========================
 def get_connector(mode):
-    data = {
+    return {
         "free": ["PRO улучшение", "Вакансии", "HR интервью"],
         "pro": ["VIP резюме", "Сайт-визитка", "Анализ рынка"],
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
-    }
-    return data.get(mode, [])
+    }.get(mode, [])
 
 # =========================
-# START COMMAND
+# START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -56,40 +58,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # =========================
-# HANDLER
+# CALLBACK
 # =========================
 async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    q = update.callback_query
-    await q.answer()
+    query = update.callback_query
+    await query.answer()
 
-    mode = q.data
-    user_id = q.from_user.id
+    mode = query.data
+    user_id = query.from_user.id
 
     USER[user_id] = mode
 
-    await q.message.reply_text(f"✅ {mode.upper()} MODE ACTIVE")
+    await query.message.reply_text(f"✅ {mode.upper()} MODE ACTIVE")
 
     steps = get_connector(mode)
 
-    if steps:
-        await q.message.reply_text(
-            "🔗 NEXT STEPS:\n\n" + "\n".join("➡️ " + s for s in steps)
-        )
-    else:
-        await q.message.reply_text("⚠️ Нет данных для режима")
+    await query.message.reply_text(
+        "🔗 NEXT STEPS:\n\n" + "\n".join("➡️ " + s for s in steps)
+    )
 
 # =========================
 # MAIN
 # =========================
 def main():
 
+    print("🔄 STARTING BOT...")
+
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
-
-    print("🔄 RUNNING ON RENDER...")
 
     app.run_polling()
 
