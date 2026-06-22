@@ -3,25 +3,20 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-print("BOT STARTED")
+print("BOT STARTED OK")
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-
-if not TOKEN:
-    print("NO TOKEN")
-    exit()
 
 logging.basicConfig(level=logging.INFO)
 
 USER = {}
 
 def get_connector(mode):
-    data = {
+    return {
         "free": ["PRO улучшение", "Вакансии", "HR интервью"],
         "pro": ["VIP резюме", "Сайт-визитка", "Анализ рынка"],
         "vip": ["VIP стратегия", "CEO интервью", "Закрытие позиции"]
-    }
-    return data.get(mode, [])
+    }.get(mode, [])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -32,7 +27,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "CAREER ENGINE V9 ONLINE",
+        "🚀 CAREER ENGINE ONLINE",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -57,7 +52,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
 
-    print("RUNNING POLLING")
+    print("RUNNING...")
 
     app.run_polling()
 
