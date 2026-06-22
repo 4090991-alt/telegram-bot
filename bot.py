@@ -15,11 +15,7 @@ if not TOKEN:
 # =========================
 # LOGGING
 # =========================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
+logging.basicConfig(level=logging.INFO)
 print("🚀 BOT STARTED OK")
 
 # =========================
@@ -64,28 +60,30 @@ async def handler(update: Update, context):
 
     await q.message.reply_text(f"✅ {mode.upper()} MODE ACTIVE")
 
-    steps = get_connector(mode)
-
-    for step in steps:
+    for step in get_connector(mode):
         await q.message.reply_text("➡️ " + step)
 
 # =========================
-# MAIN (STABLE RENDER FIX)
+# MAIN (ЖЁСТКИЙ FIX RENDER)
 # =========================
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # 🔥 КЛЮЧЕВОЙ FIX: убираем старые webhook/updates конфликты
-    app.bot.delete_webhook(drop_pending_updates=True)
+    # 🔥 КЛЮЧЕВОЙ FIX (ВАЖНО!)
+    try:
+        app.bot.delete_webhook(drop_pending_updates=True)
+    except Exception as e:
+        print("Webhook cleanup:", e)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handler))
 
     print("RUNNING...")
 
-    # 🔥 Render-safe polling
+    # 🔥 СТАБИЛЬНЫЙ RUN
     app.run_polling(
-        drop_pending_updates=True
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"]
     )
 
 # =========================
