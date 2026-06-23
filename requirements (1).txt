@@ -1,0 +1,5 @@
+python-telegram-bot[webhooks]==20.7
+openai
+psycopg2-binary
+httpx
+reportlab
