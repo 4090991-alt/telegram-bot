@@ -1,5 +1,7 @@
 import os
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -10,6 +12,7 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+PORT = int(os.getenv("PORT", 10000))
 
 if not TOKEN:
     print("NO TOKEN FOUND")
@@ -22,6 +25,18 @@ USER = {}
 USER_STATE = {}
 USER_DATA = {}
 USER_PROFILE = {}
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+    server.serve_forever()
 
 def get_connector(mode):
     data = {
@@ -84,46 +99,4 @@ async def start(update: Update, context):
 
 async def handler(update: Update, context):
     q = update.callback_query
-    await q.answer()
-    user_id = q.from_user.id
-    if q.data in ["free", "pro", "vip"]:
-        USER[user_id] = q.data
-        await q.message.reply_text(q.data.upper() + " MODE ACTIVE")
-        for step in get_connector(q.data):
-            await q.message.reply_text(step)
-    elif q.data == "resume":
-        USER_STATE[user_id] = "resume_name"
-        USER_DATA[user_id] = {}
-        await q.message.reply_text("Enter your full name:")
-
-async def resume_flow(update: Update, context):
-    user_id = update.effective_user.id
-    text = update.message.text
-    intent = detect_intent(text)
-    if intent in ["job_search", "career_change"]:
-        USER_PROFILE[user_id] = {"intent": intent, "step": "age"}
-        await update.message.reply_text("How old are you?")
-        return
-    if user_id in USER_PROFILE:
-        profile = USER_PROFILE[user_id]
-        step = profile.get("step")
-        if step == "age":
-            profile["age"] = text
-            profile["step"] = "experience"
-            await update.message.reply_text("Work experience?")
-            return
-        if step == "experience":
-            profile["experience"] = text
-            profile["step"] = "field"
-            await update.message.reply_text("What field?")
-            return
-        if step == "field":
-            profile["field"] = text
-            profile["step"] = "goal"
-            await update.message.reply_text("Goal: money / growth / career change?")
-            return
-        if step == "goal":
-            profile["goal"] = text
-            profile["step"] = "done"
-            path = decision_engine(profile)
-            module = route_engine(path)
+    await
