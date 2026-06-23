@@ -10,8 +10,6 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-PORT = int(os.getenv("PORT", 10000))
 
 if not TOKEN:
     print("❌ NO TOKEN FOUND")
@@ -51,4 +49,10 @@ def decision_engine(profile):
     if "смена" in goal: return "career_change_path"
     if "деньги" in goal: return "growth_path"
     if exp and ("10" in exp or "20" in exp): return "senior_path"
-    return
+    return "resume_path"
+
+def route_engine(path):
+    routes = {
+        "education_path": "prof_orientation_module",
+        "career_change_path": "career_change_module",
+        "growth
